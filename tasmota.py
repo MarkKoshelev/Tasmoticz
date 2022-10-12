@@ -99,11 +99,13 @@ class Handler:
 
     # Process incoming MQTT messages
     def onMQTTPublish(self, topic, message):
-        Debug("Handler::onMQTTPublish: topic: {}".format(topic))
-
+        Debug("Handler::onMQTTPublish: topic: {}, self.topics: {}, self.subscriptions: {}".format(topic, self.topics, self.subscriptions))
+        # self.topics: 'INFO1', 'STATE', 'SENSOR', 'RESULT', 'STATUS', 'STATUS5', 'STATUS8', 'STATUS11', 'ENERGY'
+        # self.subscriptions: ['%prefix%/%topic%', '%topic%/%prefix%'] 
         # Check if we handle this topic tail at all
         subtopics = topic.split('/')
         tail = subtopics[-1]
+ 
         if tail not in self.topics:
             return True
 
@@ -117,10 +119,10 @@ class Handler:
         for subscription in self.subscriptions:
             patterns = subscription.split('/')
             for subtopic, pattern in zip(subtopics[:-1], patterns):
-                if(((pattern not in ('%topic%', '%prefix%', '+', subtopic)) or
+                if( (pattern not in ('%topic%', '%prefix%', '+', subtopic)) or
                     (pattern == '%prefix%' and subtopic != self.prefix[2] and subtopic != self.prefix[3]) or
-                        (pattern == '%topic%' and (subtopic == 'sonoff' or subtopic == 'tasmota')))
-						and '$' not in subtopic):
+                    (pattern == '%topic%' and (subtopic == 'sonoff' or subtopic == 'tasmota')) ):
+
                     fulltopic = []
                     cmndtopic = []
                     break
@@ -143,6 +145,8 @@ class Handler:
         Debug("Handler::onMQTTPublish: device: {}, cmnd: {}, tail: {}, message: {}".format(
             fullName, cmndName, tail, str(message)))
 
+        if 'DANTEX' not in fullName:
+            return True
         if tail == 'STATE':
             if updateStateDevices(fullName, cmndName, message):
                 self.requestStatus(cmndName)
@@ -446,8 +450,8 @@ def updateSensorDevices(fullName, cmndName, message):
 # Update domoticz device values related to tasmota INFO1 message: Version and Module
 def updateInfo1Devices(fullName, cmndName, message):
     try:
-        module = message["Module"]
-        version = message["Version"]
+        module = message["Info1"]["Module"]
+        version = message["Info1"]["Version"]
         for idx in findDevices(fullName):
             description = json.loads(Devices[idx].Description)
             dirty = False
