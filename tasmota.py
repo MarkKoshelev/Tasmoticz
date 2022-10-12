@@ -117,9 +117,10 @@ class Handler:
         for subscription in self.subscriptions:
             patterns = subscription.split('/')
             for subtopic, pattern in zip(subtopics[:-1], patterns):
-                if((pattern not in ('%topic%', '%prefix%', '+', subtopic)) or
+                if(((pattern not in ('%topic%', '%prefix%', '+', subtopic)) or
                     (pattern == '%prefix%' and subtopic != self.prefix[2] and subtopic != self.prefix[3]) or
-                        (pattern == '%topic%' and (subtopic == 'sonoff' or subtopic == 'tasmota'))):
+                        (pattern == '%topic%' and (subtopic == 'sonoff' or subtopic == 'tasmota')))
+						and '$' not in subtopic):
                     fulltopic = []
                     cmndtopic = []
                     break
