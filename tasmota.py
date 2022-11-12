@@ -270,9 +270,11 @@ def getSensorDevices(message):
                                 getSensorDeviceState(states, type, value, value1)
                         else:
                             if(type.startswith('A')):
+#                                v = float(value)/100
                                 getSensorDeviceState(states,type,'A',value)
                             elif(type.startswith('Range')):
-                                getSensorDeviceState(states,type,'Range',value)
+                                v = float(value)/100
+                                getSensorDeviceState(states,type,'Range',v)
                     else:
                         getSensorDeviceState(states,sensor,type,value)
     return states
