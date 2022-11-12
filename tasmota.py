@@ -229,24 +229,24 @@ def getSensorDevices(message):
     states = []
 
     typeDb = {
-        'Temperature':   {'Name': 'Temperatur',      'Unit': '°C',   'DomoType': 'Temperature'},
-        'Humidity':      {'Name': 'Feuchtigkeit',    'Unit': '%',    'DomoType': 'Humidity'},
-        'Pressure':      {'Name': 'Luftdruck',       'Unit': 'hPa',  'DomoType': 'Barometer'},
-        'Illuminance':   {'Name': 'Helligkeit',      'Unit': 'lux',  'DomoType': 'Illumination'},
-        'Distance':      {'Name': 'Abstand',         'Unit': 'mm ',  'DomoType': 'Distance'},
-        'UvLevel':       {'Name': 'UV Level',        'Unit': 'raw',  'DomoType': 'Custom'},
-        'UvIndex':       {'Name': 'UV Index',        'Unit': 'UVI',  'DomoType': 'Custom'},
-        'UvPower':       {'Name': 'UV Leistung',     'Unit': 'W/m²', 'DomoType': 'Custom'},
-        'Total':         {'Name': 'Gesamt',          'Unit': 'kWh',  'DomoType': 'Custom'},
-        'Yesterday':     {'Name': 'Gestern',         'Unit': 'kWh',  'DomoType': 'Custom'},
-        'Today':         {'Name': 'Heute',           'Unit': 'kWh',  'DomoType': 'Custom'},
-        'Power':         {'Name': 'Leistung',        'Unit': 'kW',   'DomoType': 'Usage'},
-        'ApparentPower': {'Name': 'Scheinleistung',  'Unit': 'kW',   'DomoType': 'Usage'},
-        'ReactivePower': {'Name': 'Blindleistung',   'Unit': 'kW',   'DomoType': 'Usage'},
-        'Factor':        {'Name': 'Leistungsfaktor', 'Unit': 'W/VA', 'DomoType': 'Custom'},
-        'Frequency':     {'Name': 'Frequenz',        'Unit': 'Hz',   'DomoType': 'Custom'},
-        'Voltage':       {'Name': 'Spannung',        'Unit': 'V',    'DomoType': 'Voltage'},
-        'Current':       {'Name': 'Strom',           'Unit': 'A',    'DomoType': 'Current (Single)'}
+        'Temperature':   {'Name': 'Temperature',   'Unit': '°C',   'DomoType': 'Temperature'},
+        'Humidity':      {'Name': 'Humidity',      'Unit': '%',    'DomoType': 'Humidity'},
+        'Pressure':      {'Name': 'Pressure',      'Unit': 'hPa',  'DomoType': 'Barometer'},
+        'Illuminance':   {'Name': 'Illuminance',   'Unit': 'lux',  'DomoType': 'Illumination'},
+        'Distance':      {'Name': 'Distance',      'Unit': 'mm ',  'DomoType': 'Distance'},
+        'UvLevel':       {'Name': 'UV Level',      'Unit': 'raw',  'DomoType': 'Custom'},
+        'UvIndex':       {'Name': 'UV Index',      'Unit': 'UVI',  'DomoType': 'Custom'},
+        'UvPower':       {'Name': 'UV Power',      'Unit': 'W/m²', 'DomoType': 'Custom'},
+        'Total':         {'Name': 'Total',         'Unit': 'kWh',  'DomoType': 'Custom'},
+        'Yesterday':     {'Name': 'Yesterday',     'Unit': 'kWh',  'DomoType': 'Custom'},
+        'Today':         {'Name': 'Today',         'Unit': 'kWh',  'DomoType': 'Custom'},
+        'Power':         {'Name': 'Power',         'Unit': 'kW',   'DomoType': 'Usage'},
+        'ApparentPower': {'Name': 'ApparentPower', 'Unit': 'kW',   'DomoType': 'Usage'},
+        'ReactivePower': {'Name': 'ReactivePower', 'Unit': 'kW',   'DomoType': 'Usage'},
+        'Factor':        {'Name': 'Factor',        'Unit': 'W/VA', 'DomoType': 'Custom'},
+        'Frequency':     {'Name': 'Frequency',     'Unit': 'Hz',   'DomoType': 'Custom'},
+        'Voltage':       {'Name': 'Voltage',       'Unit': 'V',    'DomoType': 'Voltage'},
+        'Current':       {'Name': 'Current',       'Unit': 'A',    'DomoType': 'Current (Single)'}
     }
 
     if isinstance(message, collections.Mapping):
@@ -260,6 +260,7 @@ def getSensorDevices(message):
                             desc['Sensor'] = 'Energie'
                         states.append((sensor, type, value, desc))
 
+    Debug('tasmota::getSensorDevices: states {}'.format(repr(states)))
     return states
 
 
@@ -435,6 +436,7 @@ def updateSensorDevices(fullName, cmndName, message):
     ret = False
     idxs = findDevices(fullName)
     #   ENERGY, Voltage, 220 {Name: Spannung, Unit: V}
+    Debug('tasmota::updateSensorDevices: message {}'.format(repr(message)))
     for sensor, type, value, desc in getSensorDevices(message):
         attr = '{}-{}'.format(sensor, type)
         idx = deviceByAttr(idxs, attr)
