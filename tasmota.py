@@ -145,7 +145,9 @@ class Handler:
         Debug("Handler::onMQTTPublish: device: {}, cmnd: {}, tail: {}, message: {}".format(
             fullName, cmndName, tail, str(message)))
 
-        if 'DANTEX' not in fullName:
+        useNames = {'DANTEX' , 'D3_H12KW'}
+        
+        if fullName not in useNames:
             return True
         if tail == 'STATE':
             if updateStateDevices(fullName, cmndName, message):
@@ -225,44 +227,55 @@ def getStateDevices(message):
 #  * Unit is only relevant for DomoType Custom (AFAIK other types have fixed units in domoticz)
 #  * Valid DomoType strings can be found in maptypename(): https://github.com/domoticz/domoticz/blob/development/hardware/plugins/PythonObjects.cpp#L365
  
-def getSensorDevices(message):
-    states = []
-
+def getSensorDeviceState(states, sens, type, value):
     typeDb = {
-        'Temperature':   {'Name': 'Temperature',   'Unit': '°C',   'DomoType': 'Temperature'},
-        'Humidity':      {'Name': 'Humidity',      'Unit': '%',    'DomoType': 'Humidity'},
-        'Pressure':      {'Name': 'Pressure',      'Unit': 'hPa',  'DomoType': 'Barometer'},
-        'Illuminance':   {'Name': 'Illuminance',   'Unit': 'lux',  'DomoType': 'Illumination'},
-        'Distance':      {'Name': 'Distance',      'Unit': 'mm ',  'DomoType': 'Distance'},
-        'UvLevel':       {'Name': 'UV Level',      'Unit': 'raw',  'DomoType': 'Custom'},
-        'UvIndex':       {'Name': 'UV Index',      'Unit': 'UVI',  'DomoType': 'Custom'},
-        'UvPower':       {'Name': 'UV Power',      'Unit': 'W/m²', 'DomoType': 'Custom'},
-        'Total':         {'Name': 'Total',         'Unit': 'kWh',  'DomoType': 'Custom'},
-        'Yesterday':     {'Name': 'Yesterday',     'Unit': 'kWh',  'DomoType': 'Custom'},
-        'Today':         {'Name': 'Today',         'Unit': 'kWh',  'DomoType': 'Custom'},
-        'Power':         {'Name': 'Power',         'Unit': 'kW',   'DomoType': 'Usage'},
-        'ApparentPower': {'Name': 'ApparentPower', 'Unit': 'kW',   'DomoType': 'Usage'},
-        'ReactivePower': {'Name': 'ReactivePower', 'Unit': 'kW',   'DomoType': 'Usage'},
-        'Factor':        {'Name': 'Factor',        'Unit': 'W/VA', 'DomoType': 'Custom'},
-        'Frequency':     {'Name': 'Frequency',     'Unit': 'Hz',   'DomoType': 'Custom'},
-        'Voltage':       {'Name': 'Voltage',       'Unit': 'V',    'DomoType': 'Voltage'},
-        'Current':       {'Name': 'Current',       'Unit': 'A',    'DomoType': 'Current (Single)'}
+    'Temperature':   {'Name': 'Temperature',   'Unit': '°C',   'DomoType': 'Temperature'},
+    'Humidity':      {'Name': 'Humidity',      'Unit': '%',    'DomoType': 'Humidity'},
+    'Pressure':      {'Name': 'Pressure',      'Unit': 'hPa',  'DomoType': 'Barometer'},
+    'Illuminance':   {'Name': 'Illuminance',   'Unit': 'lux',  'DomoType': 'Illumination'},
+    'Distance':      {'Name': 'Distance',      'Unit': 'mm ',  'DomoType': 'Distance'},
+    'UvLevel':       {'Name': 'UV Level',      'Unit': 'raw',  'DomoType': 'Custom'},
+    'UvIndex':       {'Name': 'UV Index',      'Unit': 'UVI',  'DomoType': 'Custom'},
+    'UvPower':       {'Name': 'UV Power',      'Unit': 'W/m²', 'DomoType': 'Custom'},
+    'Total':         {'Name': 'Total',         'Unit': 'kWh',  'DomoType': 'Custom'},
+    'Yesterday':     {'Name': 'Yesterday',     'Unit': 'kWh',  'DomoType': 'Custom'},
+    'Today':         {'Name': 'Today',         'Unit': 'kWh',  'DomoType': 'Custom'},
+#    'Power':         {'Name': 'Power',         'Unit': 'kW',   'DomoType': 'Usage'},
+    'ApparentPower': {'Name': 'ApparentPower', 'Unit': 'kW',   'DomoType': 'Usage'},
+    'ReactivePower': {'Name': 'ReactivePower', 'Unit': 'kW',   'DomoType': 'Usage'},
+    'Factor':        {'Name': 'Factor',        'Unit': 'W/VA', 'DomoType': 'Custom'},
+    'Frequency':     {'Name': 'Frequency',     'Unit': 'Hz',   'DomoType': 'Custom'},
+    'Voltage':       {'Name': 'Voltage',       'Unit': 'V',    'DomoType': 'Voltage'},
+    'Current':       {'Name': 'Current',       'Unit': 'A',    'DomoType': 'Current (Single)'},
+    'Range':         {'Name': 'Pressure',      'Unit': 'Bar',  'DomoType': 'Pressure'},
+    'A':             {'Name': 'Pressure',      'Unit': 'Bar',  'DomoType': 'Pressure'}
     }
 
+    if type in typeDb and value is not None:
+        desc = typeDb[type].copy()
+        desc['Sensor'] = sens
+        if sens == 'ENERGY':
+            desc['Sensor'] = 'Energy'
+        states.append((sens, type, value, desc))
+
+def getSensorDevices(message):
+    states = []
     if isinstance(message, collections.Mapping):
         for sensor, sensorData in message.items():
             if isinstance(sensorData, collections.Mapping):
                 for type, value in sensorData.items():
-                    if type in typeDb and value is not None:
-                        desc = typeDb[type].copy()
-                        desc['Sensor'] = sensor
-                        if sensor == 'ENERGY':
-                            desc['Sensor'] = 'Energie'
-                        states.append((sensor, type, value, desc))
-
-    Debug('tasmota::getSensorDevices: states {}'.format(repr(states)))
+                    if sensor == 'ANALOG' :
+                        if isinstance(value, collections.Mapping):
+                            for value, value1 in value.items():
+                                getSensorDeviceState(states, type, value, value1)
+                        else:
+                            if(type.startswith('A')):
+                                getSensorDeviceState(states,type,'A',value)
+                            elif(type.startswith('Range')):
+                                getSensorDeviceState(states,type,'Range',value)
+                    else:
+                        getSensorDeviceState(states,sensor,type,value)
     return states
-
 
 # Find the domoticz device unit id matching a STATE or SENSOR attribute coming from tasmota
 def deviceByAttr(idxs, attr):
@@ -435,7 +448,7 @@ def updateResultDevice(fullName, message):
 def updateSensorDevices(fullName, cmndName, message):
     ret = False
     idxs = findDevices(fullName)
-    #   ENERGY, Voltage, 220 {Name: Spannung, Unit: V}
+    #   ENERGY, Voltage, 220 {Name: Voltage, Unit: V}
     Debug('tasmota::updateSensorDevices: message {}'.format(repr(message)))
     for sensor, type, value, desc in getSensorDevices(message):
         attr = '{}-{}'.format(sensor, type)
