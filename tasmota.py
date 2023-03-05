@@ -145,9 +145,9 @@ class Handler:
         Debug("Handler::onMQTTPublish: device: {}, cmnd: {}, tail: {}, message: {}".format(
             fullName, cmndName, tail, str(message)))
 
-        useNames = {'DANTEX' , 'D3_H12KW'}
+        #useMQTTDevices = {'DANTEX' , 'D3_H12KW'}
         
-        if fullName not in useNames:
+        if fullName not in self.useMQTTDevices:
             return True
         if tail == 'STATE':
             if updateStateDevices(fullName, cmndName, message):

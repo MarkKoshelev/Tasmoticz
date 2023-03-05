@@ -23,6 +23,7 @@
         <param field="Mode2" label="Prefix2 (stat)" width="300px" default="stat"/>
         <param field="Mode3" label="Prefix3 (tele)" width="300px" default="tele"/>
         <param field="Mode4" label="Subscriptions"  width="300px" default="%prefix%/%topic%|%topic%/%prefix%"/>
+        <param field="MQTTDevices" label="MQTT device name: device1,device2"  width="300px" default="*"/>
 
         <param field="Mode6" label="Logging" width="75px">
             <options>
@@ -91,6 +92,7 @@ class Plugin:
                 self.tasmotaHandler = Handler(Parameters["Mode4"].strip().split('|'), Parameters["Mode1"].strip(
                     ), Parameters["Mode2"].strip(), Parameters["Mode3"].strip(), self.mqttClient, Devices)
                 self.tasmotaHandler.debug(True)
+				self.useMQTTDevices = Parameters["MQTTDevices"].strip().split(',')
             except Exception as e:
                 Domoticz.Error("Plugin::onStart: {}".format(str(e)))
                 self.mqttClient = None
