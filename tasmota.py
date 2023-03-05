@@ -47,7 +47,7 @@ class Handler:
                        'STATUS5', 'STATUS8', 'STATUS11', 'ENERGY']
 
         self.prefix = [None] + prefixes
-		self.tasmotaDevices = tasmotaDevices
+        self.tasmotaDevices = tasmotaDevices
         self.subscriptions = subscriptions
         self.mqttClient = mqttClient
 
