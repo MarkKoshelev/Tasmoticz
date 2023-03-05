@@ -7,15 +7,15 @@ errmsg = ""
 try:
     import Domoticz
 except Exception as e:
-    errmsg += "Domoticz core start error: "+str(e)
+    errmsg += "Exception:Domoticz core start error: "+str(e)
 try:
     import json
 except Exception as e:
-    errmsg += " Json import error: "+str(e)
+    errmsg += " Exception:Json import error: "+str(e)
 try:
     import binascii
 except Exception as e:
-    errmsg += " binascii import error: "+str(e)
+    errmsg += " Exception:binascii import error: "+str(e)
 
 
 tasmotaDebug = True
@@ -35,9 +35,8 @@ def Debug(msg):
 
 # Handles incoming Tasmota messages from MQTT or Domoticz commands for Tasmota devices
 class Handler:
-    def __init__(self, subscriptions, prefix1, prefix2, prefix3, mqttClient, devices):
-        Debug("Handler::__init__(cmnd: {}, stat: {}, tele: {}, subs: {})".format(
-            prefix1, prefix2, prefix3, repr(subscriptions)))
+    def __init__(self, subscriptions, prefixes, tasmotaDevices, mqttClient, devices):
+        Debug("Handler::__init__(prefixes: {}, subs: {})".format(prefixes, repr(subscriptions)))
 
         if errmsg != "":
             Domoticz.Error(
@@ -47,7 +46,8 @@ class Handler:
         self.topics = ['INFO1', 'STATE', 'SENSOR', 'RESULT', 'STATUS',
                        'STATUS5', 'STATUS8', 'STATUS11', 'ENERGY']
 
-        self.prefix = [None, prefix1, prefix2, prefix3]
+        self.prefix = [None] + prefixes
+		self.tasmotaDevices = tasmotaDevices
         self.subscriptions = subscriptions
         self.mqttClient = mqttClient
 
@@ -145,10 +145,11 @@ class Handler:
         Debug("Handler::onMQTTPublish: device: {}, cmnd: {}, tail: {}, message: {}".format(
             fullName, cmndName, tail, str(message)))
 
-        #useMQTTDevices = {'DANTEX' , 'D3_H12KW'}
+        #tasmotaDevices = {'DANTEX' , 'D3_H12KW'}
         
-        if fullName not in self.useMQTTDevices:
+        if fullName not in self.tasmotaDevices:
             return True
+			
         if tail == 'STATE':
             if updateStateDevices(fullName, cmndName, message):
                 self.requestStatus(cmndName)
@@ -176,7 +177,7 @@ class Handler:
             topic = '{}/{}'.format(cmdName, "STATUS")
             self.mqttClient.publish(topic, "")
         except Exception as e:
-            Domoticz.Error("Handler::requestStatus: {}".format(str(e)))
+            Domoticz.Error("Exception:Handler::requestStatus: {}".format(str(e)))
 
 
 ###########################
@@ -486,7 +487,7 @@ def updateInfo1Devices(fullName, cmndName, message):
                 Devices[idx].Update(nValue=Devices[idx].nValue, sValue=Devices[idx].sValue, 
                     Description=json.dumps(description, indent=2, ensure_ascii=False), SuppressTriggers=True)
     except Exception as e:
-        Domoticz.Error("tasmota::updateInfo1Devices: Set module and version failed: {}".format(str(e)))
+        Domoticz.Error("Exception:tasmota::updateInfo1Devices: Set module and version failed: {}".format(str(e)))
 
 
 # Update domoticz device names from friendly names of tasmota STATUS message
@@ -517,7 +518,7 @@ def updateStatusDevices(fullName, cmndName, message):
                 Debug("tasmota::updateStatusDevices: idx: {}, rename: {}, skipped: {}".format(
                     idx, Devices[idx].Name, repr(names)))
     except Exception as e:
-        Domoticz.Error("tasmota::updateStatusDevices: Set friendly name failed: {}".format(str(e)))
+        Domoticz.Error("Exception:tasmota::updateStatusDevices: Set friendly name failed: {}".format(str(e)))
 
 
 # TODO

@@ -19,11 +19,9 @@
         <param field="Mode5"    label="Client" width="300px" default=""/>
         <param field="Password" label="Password" width="300px" default="" password="true"/>
         
-        <param field="Mode1" label="Prefix1 (cmnd)" width="300px" default="cmnd"/>
-        <param field="Mode2" label="Prefix2 (stat)" width="300px" default="stat"/>
-        <param field="Mode3" label="Prefix3 (tele)" width="300px" default="tele"/>
+        <param field="Mode1" label="Prefixes (cmnd|stat|tele)" width="300px" default="cmnd|stat|tele"/>
         <param field="Mode4" label="Subscriptions"  width="300px" default="%prefix%/%topic%|%topic%/%prefix%"/>
-        <param field="MQTTDevices" label="MQTT device name: device1,device2"  width="300px" default="*"/>
+        <param field="Mode2" label="Tasmota devices (dev1|dev2)"  width="300px" default="None"/>
 
         <param field="Mode6" label="Logging" width="75px">
             <options>
@@ -89,10 +87,9 @@ class Plugin:
                 self.mqttClient = MqttClient(self.mqttserveraddress, self.mqttserverport, Parameters["Mode5"],
                                              self.onMQTTConnected, self.onMQTTDisconnected, self.onMQTTPublish, self.onMQTTSubscribed)
                 self.mqttClient.debug(False)
-                self.tasmotaHandler = Handler(Parameters["Mode4"].strip().split('|'), Parameters["Mode1"].strip(
-                    ), Parameters["Mode2"].strip(), Parameters["Mode3"].strip(), self.mqttClient, Devices)
+				#Mode4:Subscriptions, Mode1: prefixes, Mode2: TasmotaDevices 				
+                self.tasmotaHandler = Handler(Parameters["Mode4"].strip().split('|'), Parameters["Mode1"].strip().split('|'), Parameters["Mode2"].strip().split('|'), self.mqttClient, Devices)
                 self.tasmotaHandler.debug(True)
-				self.useMQTTDevices = Parameters["MQTTDevices"].strip().split(',')
             except Exception as e:
                 Domoticz.Error("Plugin::onStart: {}".format(str(e)))
                 self.mqttClient = None
