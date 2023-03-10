@@ -242,7 +242,7 @@ def getSensorDeviceState(states, sens, type, value):
     'Total':         {'Name': 'Total',         'Unit': 'kWh',  'DomoType': 'Custom'},
     'Yesterday':     {'Name': 'Yesterday',     'Unit': 'kWh',  'DomoType': 'Custom'},
     'Today':         {'Name': 'Today',         'Unit': 'kWh',  'DomoType': 'Custom'},
-#    'Power':         {'Name': 'Power',         'Unit': 'kW',   'DomoType': 'Usage'},
+    'Power':         {'Name': 'Power',         'Unit': 'kW',   'DomoType': 'Usage'},
     'ApparentPower': {'Name': 'ApparentPower', 'Unit': 'kW',   'DomoType': 'Usage'},
     'ReactivePower': {'Name': 'ReactivePower', 'Unit': 'kW',   'DomoType': 'Usage'},
     'Factor':        {'Name': 'Factor',        'Unit': 'W/VA', 'DomoType': 'Custom'},
