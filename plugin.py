@@ -39,15 +39,15 @@ errmsg = ""
 try:
     import Domoticz
 except Exception as e:
-    errmsg += "Domoticz core start error: "+str(e)
+    errmsg += "Exception:Domoticz core start error: "+str(e)
 try:
     from mqtt import MqttClient, setMqttDebug
 except Exception as e:
-    errmsg += " mqtt::MqttClient import error: "+str(e)
+    errmsg += " Exception:mqtt::MqttClient import error: "+str(e)
 try:
     from tasmota import Handler, setTasmotaDebug
 except Exception as e:
-    errmsg += " tasmota::Handler import error: "+str(e)
+    errmsg += " Exception:tasmota::Handler import error: "+str(e)
 
 
 pluginDebug = True
@@ -91,7 +91,7 @@ class Plugin:
                 self.tasmotaHandler = Handler(Parameters["Mode4"].strip().split('|'), Parameters["Mode1"].strip().split('|'), Parameters["Mode2"].strip().split('|'), self.mqttClient, Devices)
                 self.tasmotaHandler.debug(True)
             except Exception as e:
-                Domoticz.Error("Plugin::onStart: {}".format(str(e)))
+                Domoticz.Error("Exception:Plugin::onStart: {}".format(str(e)))
                 self.mqttClient = None
         else:
             Domoticz.Error(
@@ -136,7 +136,7 @@ class Plugin:
                 else:
                     self.mqttClient.ping()
             except Exception as e:
-                Domoticz.Error("Plugin::onHeartbeat error {}".format(str(e)))
+                Domoticz.Error("Exception:Plugin::onHeartbeat error {}".format(str(e)))
 
     # Let tasmotaHandler subscribe its topics
 

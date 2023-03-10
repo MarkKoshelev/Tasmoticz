@@ -143,8 +143,8 @@ class MqttClient:
         if (self._connection != Connection):
             return
 
-        Domoticz.Error("MqttClient::onDisconnect: {}:{}".format(
-            Connection.Address, Connection.Port))
+        Domoticz.Error("MqttClient::onDisconnect: {}:{} {} {}".format(
+            Connection.Address, Connection.Port, self._connection, Connection))
 
         self.close()
 
