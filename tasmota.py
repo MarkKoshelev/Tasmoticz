@@ -97,12 +97,13 @@ class Handler:
         Debug('Handler::onMQTTConnected: Subscriptions: {}'.format(repr(subs)))
         self.mqttClient.subscribe(subs)
 
-    # Process incoming MQTT messages
+    # Process incoming MQTT messages from Tasmota devices
+    # Call Update{subtopic}Devices() if it is potentially one of ours
     def onMQTTPublish(self, topic, message):
         Debug("Handler::onMQTTPublish: topic: {}, self.topics: {}, self.subscriptions: {}".format(topic, self.topics, self.subscriptions))
         # self.topics: 'INFO1', 'STATE', 'SENSOR', 'RESULT', 'STATUS', 'STATUS5', 'STATUS8', 'STATUS11', 'ENERGY'
         # self.subscriptions: ['%prefix%/%topic%', '%topic%/%prefix%'] 
-        # Check if we handle this topic tail at all
+        # Check if we handle this topic tail at all (hardcoded list SENSOR, STATUS, ...)
         subtopics = topic.split('/')
         tail = subtopics[-1]
  
@@ -110,7 +111,7 @@ class Handler:
             return True
 
         # Different Tasmota devices can have different FullTopic patterns.
-        # All FullTopic patterns we care about are in self.subscriptions
+        # All FullTopic patterns we care about are in self.subscriptions (plugin config)
         # Tasmota devices will be identified by a hex hash from FullTopic without %prefix%
 
         # Identify the subscription that matches our received subtopics
@@ -141,7 +142,7 @@ class Handler:
         cmndName = '/'.join(cmndtopic)
 
         # fullName should now contain all subtopic parts except for %prefix%es and tail
-        # I.e. fullName is uniquely identifying the sensor or button refered by the message
+        # I.e. fullName is uniquely identifying the sensor or button referred by the message
         Debug("Handler::onMQTTPublish: device: {}, cmnd: {}, tail: {}, message: {}".format(
             fullName, cmndName, tail, str(message)))
 
@@ -150,22 +151,22 @@ class Handler:
         if fullName not in self.tasmotaDevices:
             return True
 			
-        if tail == 'STATE':
+        if tail == 'STATE':  # POWER* status
             if updateStateDevices(fullName, cmndName, message):
                 self.requestStatus(cmndName)
         elif tail == 'SENSOR':
             if updateSensorDevices(fullName, cmndName, message):
                 self.requestStatus(cmndName)
-        elif tail == 'RESULT':
+        elif tail == 'RESULT':  # POWER* change
             updateResultDevice(fullName, message)
-        elif tail == 'STATUS':
+        elif tail == 'STATUS':  # Friendly names
             updateStatusDevices(fullName, cmndName, message)
-        if tail == 'INFO1':
+        elif tail == 'INFO1':  # update module and version in device description
             updateInfo1Devices(fullName, cmndName, message)
             self.requestStatus(cmndName)
-        elif tail == 'STATUS5':
+        elif tail == 'STATUS5':  # nop
             updateNetDevices(fullName, cmndName, message)
-        elif tail == 'ENERGY':
+        elif tail == 'ENERGY':  # nop
             updateEnergyDevices(fullName, cmndName, message)
 
         return True
@@ -280,6 +281,7 @@ def getSensorDevices(message):
                         getSensorDeviceState(states,sensor,type,value)
     return states
 
+
 # Find the domoticz device unit id matching a STATE or SENSOR attribute coming from tasmota
 def deviceByAttr(idxs, attr):
     for idx in idxs:
@@ -310,7 +312,7 @@ def deviceByAttr(idxs, attr):
 #  Domoticz.Device(Name=unitname, Unit=iUnit,Type=241, Subtype=6, Switchtype=7, Used=1,DeviceID=unitname).Create() # create RGBZW device
 
 
-# Create a domoticz device from infos extracted out of tasmota STATE tele messages
+# Create a domoticz device from infos extracted out of tasmota STATE tele messages (POWER*)
 def createStateDevice(fullName, cmndName, deviceAttr):
     '''
     Create domoticz device for deviceName
@@ -420,7 +422,7 @@ def updateValue(idx, attr, value):
             Devices[idx].Update(nValue=nValue, sValue=sValue)
 
 
-# Update domoticz device values related to tasmota STATE message, create device if it does not exist yet
+# Update domoticz device values related to tasmota STATE message (POWER*), create device if it does not exist yet
 # Returns true if a new device was created
 def updateStateDevices(fullName, cmndName, message):
     ret = False
@@ -465,7 +467,7 @@ def updateSensorDevices(fullName, cmndName, message):
     return ret
 
 
-# Update domoticz device values related to tasmota INFO1 message: Version and Module
+# Update domoticz device description related to tasmota INFO1 message: Version and Module
 def updateInfo1Devices(fullName, cmndName, message):
     try:
         module = message["Info1"]["Module"]
@@ -490,7 +492,7 @@ def updateInfo1Devices(fullName, cmndName, message):
         Domoticz.Error("Exception:tasmota::updateInfo1Devices: Set module and version failed: {}".format(str(e)))
 
 
-# Update domoticz device names from friendly names of tasmota STATUS message
+# Update domoticz device names and description from friendly names of tasmota STATUS message (seen on boot)
 def updateStatusDevices(fullName, cmndName, message):
     try:
         names = message["Status"]["FriendlyName"]
@@ -504,9 +506,12 @@ def updateStatusDevices(fullName, cmndName, message):
                     name = names[i]
                     break
             if name == None and names[0] not in nonames:
+                # not a multi power switch or multi value sensor: use first friendly name
                 name = names[0]
             if name != None and command != 'POWER':
+                # sensors names combine friendly name + type
                 name += ' ' + description["Type"]
+            # Check if name is valid and has changed
             if name != None and Devices[idx].Name != name and ('Name' not in description or Devices[idx].Name == description["Name"]):
                 Domoticz.Log("tasmota::updateStatusDevices: idx: {}, from: {}, to: {}".format(
                     idx, Devices[idx].Name, name))
