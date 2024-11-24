@@ -228,6 +228,32 @@ def getStateDevices(message):
 #  * Name is used for display / translation
 #  * Unit is only relevant for DomoType Custom (AFAIK other types have fixed units in domoticz)
 #  * Valid DomoType strings can be found in maptypename(): https://github.com/domoticz/domoticz/blob/development/hardware/plugins/PythonObjects.cpp#L365
+
+#MQT: tele/D1-HAIER-POW/SENSOR = {"Time":"2024-11-12T23:01:05",
+#"ENERGY":
+# {"TotalStartTime":"2024-02-20T22:54:12",
+# "Total":711.792,"TotalTariff":[96.965,614.826],
+# "Yesterday":9.928,"Today":10.541,"Period":12,
+# "Power":734,"ApparentPower":769,"ReactivePower":230,"Factor":0.95,
+# "Voltage":242,"Current":3.182}}
+
+#MQT: tele/D3-ELUX-POW/SENSOR = {"Time":"2024-11-12T23:03:50",
+#"ENERGY":
+#{"TotalStartTime":"2021-12-18T16:50:32",
+# "Total":6821.566,
+# "Yesterday":14.113,"Today":17.887,"Period":27,
+# "Power":1666,"ApparentPower":1718,"ReactivePower":420,"Factor":0.97,
+# "Voltage":234,"Current":7.345}}
+
+#MQT: tele/D3-H12KW/SENSOR = {"Time":"2024-11-24T22:07:28",
+#"ANALOG":
+#{"CTEnergy1":{"Energy":62.962,"Power":2,"Voltage":220,"Current":0.010},
+#"Range5":188},
+#"DS18B20-1":{"Id":"3C01F09620CB","Temperature":38.2},
+#"DS18B20-2":{"Id":"1DA15B1E64FF","Temperature":37.6},
+#"TempUnit":"C"}
+
+
  
 def getSensorDeviceState(states, sens, type, value):
     typeDb = {
@@ -243,14 +269,19 @@ def getSensorDeviceState(states, sens, type, value):
     'Yesterday':     {'Name': 'Yesterday',     'Unit': 'kWh',  'DomoType': 'Custom'},
     'Today':         {'Name': 'Today',         'Unit': 'kWh',  'DomoType': 'Custom'},
     'Power':         {'Name': 'Power',         'Unit': 'kW',   'DomoType': 'Usage'},
+    'TotalTariff':   {'Name': 'Tariff',        'Unit': '',     'DomoType': '250;1;0'},
     'ApparentPower': {'Name': 'ApparentPower', 'Unit': 'kW',   'DomoType': 'Usage'},
     'ReactivePower': {'Name': 'ReactivePower', 'Unit': 'kW',   'DomoType': 'Usage'},
     'Factor':        {'Name': 'Factor',        'Unit': 'W/VA', 'DomoType': 'Custom'},
     'Frequency':     {'Name': 'Frequency',     'Unit': 'Hz',   'DomoType': 'Custom'},
     'Voltage':       {'Name': 'Voltage',       'Unit': 'V',    'DomoType': 'Voltage'},
     'Current':       {'Name': 'Current',       'Unit': 'A',    'DomoType': 'Current (Single)'},
-    'Range':         {'Name': 'Pressure',      'Unit': 'Bar',  'DomoType': 'Pressure'},
+    'Range':         {'Name': 'Pressure',      'Unit': 'Bar',  'DomoType': 'Pressure'}, #hack: Analog Range treat prassure
     'A':             {'Name': 'Pressure',      'Unit': 'Bar',  'DomoType': 'Pressure'}
+#    P1 Smart Meter: 250,1,0 (hardware type)
+#    P1 Smart Meter: 250,1,0 (hardware type)
+#    'TotalTariff':   {'Name': 'TotalTariff',  'Unit': '',     'DomoType': '250;1;0'} #need to add Power value to sValue = "T1;T2;0.0;0.0,P,0";
+#    'TotalTariff':   {'Name': 'TotalTariff',   'Unit': '',     'DomoType': 'P1 Smart Meter'}
     }
 
     if type in typeDb and value is not None:
@@ -260,7 +291,8 @@ def getSensorDeviceState(states, sens, type, value):
             desc['Sensor'] = 'Energy'
         states.append((sens, type, value, desc))
 
-def getSensorDevices(message):
+# Возвращает массив значеий сенсоров устройсва.
+def getSensorDeviceStates(message):
     states = []
     if isinstance(message, collections.Mapping):
         for sensor, sensorData in message.items():
@@ -367,13 +399,25 @@ def createSensorDevice(fullName, cmndName, deviceAttr, desc):
         options = {'Custom': '1;{}'.format(desc['Unit'])}
     else:
         options = None
-    Domoticz.Device(Name=deviceName, Unit=idx, TypeName=desc['DomoType'], Used=1, Options=options,
-                    Description=json.dumps(description, indent=2, ensure_ascii=False), DeviceID=deviceHash).Create()
+
+    Domoticz.Log("tasmota::createSensorDevice1: Name: {}, On: {}, Hash: {}".format(
+        deviceName, fullName, deviceHash))
+
+    if not desc['DomoType'][:1].isdigit():
+        # Create device that has a TypeName (prefered by domoticz)
+        Domoticz.Device(Name=deviceName, Unit=idx, TypeName=desc['DomoType'], Used=1, Options=options,
+            Description=json.dumps(description, indent=2, ensure_ascii=False), DeviceID=deviceHash).Create()
+    else:
+        # Create device without TypeName using domoticz low level Type, Subtype and Switchtype
+        dtype, dsub, dswitch = desc['DomoType'].split(";")
+        Domoticz.Device(Name=deviceName, Unit=idx, Type=int(dtype), Subtype=int(dsub), Switchtype=int(dswitch), Used=1, Options=options,
+            Description=json.dumps(description, indent=2, ensure_ascii=False), DeviceID=deviceHash).Create()
+
     if idx in Devices:
         # Remove hardware/plugin name from domoticz device name
         Devices[idx].Update(
             nValue=Devices[idx].nValue, sValue=Devices[idx].sValue, Name=deviceName, SuppressTriggers=True)
-        Domoticz.Log("tasmota::createSensorDevice: ID: {}, Name: {}, On: {}, Hash: {}".format(
+        Domoticz.Log("tasmota::createSensorDevice2: ID: {}, Name: {}, On: {}, Hash: {}".format(
             idx, deviceName, fullName, deviceHash))
         return idx
 
@@ -455,7 +499,7 @@ def updateSensorDevices(fullName, cmndName, message):
     idxs = findDevices(fullName)
     #   ENERGY, Voltage, 220 {Name: Voltage, Unit: V}
     Debug('tasmota::updateSensorDevices: message {}'.format(repr(message)))
-    for sensor, type, value, desc in getSensorDevices(message):
+    for sensor, type, value, desc in getSensorDeviceStates(message):
         attr = '{}-{}'.format(sensor, type)
         idx = deviceByAttr(idxs, attr)
         if idx == None:
