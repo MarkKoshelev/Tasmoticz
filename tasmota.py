@@ -468,11 +468,11 @@ def t2d(attr, value, type, subtype):
     elif type == 250:
         # Domoticz P1 meter needs nValue=0 and sValue="T1;T2;0.0;0.0,P,0"
         # Удаляем квадратные скобки и разбиваем строку по запятой
-        numbers = value.strip('[]').split(',')
+        #numbers = value.strip('[]').split(',')
         # Преобразуем строки в числа с плавающей точкой
-        T1 = float(numbers[0])
-        T2 = float(numbers[1])
-        return 0, "{};{};0.0;0.0,0,0".format(T1,T2)
+        #T1 = float(numbers[0])
+        #T2 = float(numbers[1])
+        return 0, "{};{};0.0;0.0;0;0".format(value[0],value[1])
 
     elif type == 113 and subtype in [0, 1, 2, 4]:
         # Energy, water and gas counters expected in Wh or l but come in as kWh or m³
@@ -525,6 +525,22 @@ def updateResultDevice(fullName, message):
 # Update domoticz device values related to tasmota SENSOR message, create device if it does not exist yet
 # Returns true if a new device was created
 def updateSensorDevices(fullName, cmndName, message):
+    ret = False
+    idxs = findDevices(fullName)
+    #   ENERGY, Voltage, 220 {Name: Voltage, Unit: V}
+    Debug('tasmota::updateSensorDevices: message {}'.format(repr(message)))
+    for sensor, type, value, desc in getSensorDeviceStates(message):
+        attr = '{}-{}'.format(sensor, type)
+        idx = deviceByAttr(idxs, attr)
+        if idx == None:
+            idx = createSensorDevice(fullName, cmndName, attr, desc)
+            if idx != None:
+                ret = True
+        if idx != None:
+            updateValue(idx, attr, value)
+    return ret
+
+def updateSensorDevicesNew(fullName, cmndName, message):
     ret = False
     idxs = findDevices(fullName)
     #   ENERGY, Voltage, 220 {Name: Voltage, Unit: V}
@@ -649,3 +665,4 @@ def updateEnergyDevices(fullName, cmndName, message):
 # send RSSI on updates, RSSI as sensor value
 # combined tasmota sensor values (temp/humi/baro, ...)
 # respect units configured in tasmota (°C vs F, ...) 
+
