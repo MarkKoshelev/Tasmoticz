@@ -413,7 +413,6 @@ def createSensorDevice(fullName, cmndName, deviceAttr, desc):
         deviceName, fullName, deviceHash))
 
     if not desc['DomoType'][:1].isdigit():
-        # Create device that has a TypeName (prefered by domoticz)
         Domoticz.Device(Name=deviceName, Unit=idx, TypeName=desc['DomoType'], Used=1, Options=options,
             Description=json.dumps(description, indent=2, ensure_ascii=False), DeviceID=deviceHash).Create()
     else:
@@ -672,30 +671,3 @@ def updateEnergyDevices(fullName, cmndName, message):
 # send RSSI on updates, RSSI as sensor value
 # combined tasmota sensor values (temp/humi/baro, ...)
 # respect units configured in tasmota (°C vs F, ...) 
-
-2024-11-30 02:26:59.151 Д1-TasmotaAD: Handler::onMQTTPublish: device: D3-3WAY2, cmnd: cmnd/D3-3WAY2, tail: RESULT, message: {'POWER2': 'OFF'}
-2024-11-30 02:26:59.403 Д1-TasmotaAD: Handler::onMQTTPublish: device: D3-ELUX-POW, cmnd: cmnd/D3-ELUX-POW, tail: STATE, message: {'Time': '2024-11-30T02:26:59', 'Uptime': '7T11:45:26', 'UptimeSec': 647126, 'Heap': 31, 'SleepMode': 'Dynamic', 'Sleep': 50, 'LoadAvg': 19, 'MqttCount': 10, 'POWER': 'ON', 'Wifi': {'AP': 1, 'SSId': 'IoT-01', 'BSSId': '04:95:E6:15:A2:40', 'Channel': 10, 'Mode': '11n', 'RSSI': 100, 'Signal': -46, 'LinkCount': 12, 'Downtime': '0T00:05:24'}}
-2024-11-30 02:26:59.403 Д1-TasmotaAD: Handler::onMQTTPublish: device: D3-ELUX-POW, cmnd: cmnd/D3-ELUX-POW, tail: SENSOR, message: {'Time': '2024-11-30T02:26:59', 'ENERGY': 
-    {'TotalStartTime': '2021-12-18T16:50:32', 'Total': 7037.442, 'TotalTariff': [48.057, 6989.386], 'Yesterday': 21.54, 'Today': 2.321, 'Period': 14, 'Power': 854, 'ApparentPower': 925, 'ReactivePower': 357, 'Factor': 0.92, 'Voltage': 241, 'Current': 3.845}}
-2024-11-30 02:26:59.430 Error: Д3-TasmotaAD: Call to function 'onMessage' failed, exception details:
-2024-11-30 02:26:59.431 Error: Д3-TasmotaAD: Traceback (most recent call last):
-2024-11-30 02:26:59.431 Error: Д3-TasmotaAD: File "/home/oper/domoticz/plugins/Tasmoticz/plugin.py", line 182, in onMessage
-2024-11-30 02:26:59.431 Error: Д3-TasmotaAD: _plugin.onMessage(Connection, Data)
-2024-11-30 02:26:59.431 Error: Д3-TasmotaAD: File "/home/oper/domoticz/plugins/Tasmoticz/plugin.py", line 126, in onMessage
-2024-11-30 02:26:59.431 Error: Д3-TasmotaAD: self.mqttClient.onMessage(Connection, Data)
-2024-11-30 02:26:59.432 Error: Д3-TasmotaAD: File "/home/oper/domoticz/plugins/Tasmoticz/mqtt.py", line 186, in onMessage
-2024-11-30 02:26:59.432 Error: Д3-TasmotaAD: self.on_mqtt_message_cb(topic, message)
-2024-11-30 02:26:59.432 Error: Д3-TasmotaAD: File "/home/oper/domoticz/plugins/Tasmoticz/plugin.py", line 156, in onMQTTPublish
-2024-11-30 02:26:59.432 Error: Д3-TasmotaAD: return self.tasmotaHandler.onMQTTPublish(topic, message)
-2024-11-30 02:26:59.432 Error: Д3-TasmotaAD: File "/home/oper/domoticz/plugins/Tasmoticz/tasmota.py", line 155, in onMQTTPublish
-2024-11-30 02:26:59.432 Error: Д3-TasmotaAD: if updateSensorDevices(fullName, cmndName, message):
-2024-11-30 02:26:59.432 Error: Д3-TasmotaAD: File "/home/oper/domoticz/plugins/Tasmoticz/tasmota.py", line 547, in updateSensorDevices
-2024-11-30 02:26:59.432 Error: Д3-TasmotaAD: updateValue(idx, attr, value)
-2024-11-30 02:26:59.432 Error: Д3-TasmotaAD: File "/home/oper/domoticz/plugins/Tasmoticz/tasmota.py", line 486, in updateValue
-2024-11-30 02:26:59.432 Error: Д3-TasmotaAD: nValue, sValue = t2d(attr, value, Devices[idx].Type, Devices[idx].SubType)
-2024-11-30 02:26:59.432 Error: Д3-TasmotaAD: File "/home/oper/domoticz/plugins/Tasmoticz/tasmota.py", line 475, in t2d
-2024-11-30 02:26:59.432 Error: Д3-TasmotaAD: return 0, "{};{};0.0;0.0;{};0".format(value[0]*1000,value[1]*1000,value[2])
-2024-11-30 02:26:59.432 Error: Д3-TasmotaAD: IndexError: list index out of range
-2024-11-30 02:26:59.655 Д1-TasmotaAD: Handler::onMQTTPublish: device: D3-3WAY2, cmnd: cmnd/D3-3WAY2, tail: RESULT, message: {'Shutter1': {'Position': 43, 'Direction': 0, 'Target': 43}}
-2024-11-30 02:27:00.146 dzVents: EXT_TEMP: extTemp:0.4 ext_temp_global: 0.4 ext_temp_global.size: 60
-
