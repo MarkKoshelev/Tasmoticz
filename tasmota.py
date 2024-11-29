@@ -539,11 +539,11 @@ def updateSensorDevices(fullName, cmndName, message):
         if idx != None:
             if type == 'P1':
                 for sensor, type, value1, desc in getSensorDeviceStates(message):
-                    if type == 'Power':
+                    if desc[Name] == 'Power':
                         break
                 value.append(value1)
                 updateValue(idx, attr, value)
-            else
+            else:
                 updateValue(idx, attr, value)
     return ret
 
