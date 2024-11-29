@@ -195,7 +195,7 @@ def findDevices(fullName):
         if Devices[device].DeviceID == deviceHash:
             idxs.append(device)
 
-    Debug('tasmota::findDevices: fullName: {}, Idxs {}'.format(fullName, repr(idxs)))
+ #   Debug('tasmota::findDevices: fullName: {}, Idxs {}'.format(fullName, repr(idxs)))
     return idxs
 
 
@@ -251,7 +251,11 @@ def getStateDevices(message):
 #"DS18B20-2":{"Id":"1DA15B1E64FF","Temperature":37.6},
 #"TempUnit":"C"}
 
+#2024-11-28 23:11:34.258 Д1-TasmotaAD: Handler::onMQTTPublish: device: D1-HAIER-POW, cmnd: cmnd/D1-HAIER-POW, tail: SENSOR, 
+#message: {'Time': '2024-11-28T23:11:33', 'ENERGY': {'TotalStartTime': '2024-02-20T22:54:12', 'Total': 884.774, 'TotalTariff': [42.824, 841.95],
+#'Yesterday': 23.144, 'Today': 19.221, 'Period': 11, 'Power': 662, 'ApparentPower': 693, 'ReactivePower': 204, 'Factor': 0.96, 'Voltage': 232, 'Current': 2.984}}
 
+# https://www.b4x.com/android/forum/threads/rrfxmeter.139786/
  
 def getSensorDeviceState(states, sens, type, value):
     typeDb = {
@@ -263,11 +267,12 @@ def getSensorDeviceState(states, sens, type, value):
     'UvLevel':       {'Name': 'UV Level',      'Unit': 'raw',  'DomoType': 'Custom'},
     'UvIndex':       {'Name': 'UV Index',      'Unit': 'UVI',  'DomoType': 'Custom'},
     'UvPower':       {'Name': 'UV Power',      'Unit': 'W/m²', 'DomoType': 'Custom'},
-    'Total':         {'Name': 'Total',         'Unit': 'kWh',  'DomoType': 'Custom'},
+#    'Total':         {'Name': 'Total',         'Unit': 'kWh',  'DomoType': 'Custom'},
+    'Total':         {'Name': 'Total',         'Unit': 'kWh',  'DomoType': '113;0;0'}, #0x71, ??? pTypeRFXMeter
+    'TotalTariff':   {'Name': 'Tariff',        'Unit': '',     'DomoType': '250;1;0'}, #pTypeP1Power,sTypeP1Power
     'Yesterday':     {'Name': 'Yesterday',     'Unit': 'kWh',  'DomoType': 'Custom'},
     'Today':         {'Name': 'Today',         'Unit': 'kWh',  'DomoType': 'Custom'},
     'Power':         {'Name': 'Power',         'Unit': 'kW',   'DomoType': 'Usage'},
-    'TotalTariff':   {'Name': 'Tariff',        'Unit': '',     'DomoType': '250;1;0'},
     'ApparentPower': {'Name': 'ApparentPower', 'Unit': 'kW',   'DomoType': 'Usage'},
     'ReactivePower': {'Name': 'ReactivePower', 'Unit': 'kW',   'DomoType': 'Usage'},
     'Factor':        {'Name': 'Factor',        'Unit': 'W/VA', 'DomoType': 'Custom'},
@@ -404,7 +409,7 @@ def createSensorDevice(fullName, cmndName, deviceAttr, desc):
     else:
         options = None
 
-    Domoticz.Log("tasmota::createSensorDevice1: Name: {}, On: {}, Hash: {}".format(
+    Domoticz.Log("tasmota::createSensorDevice: Name: {}, On: {}, Hash: {}".format(
         deviceName, fullName, deviceHash))
 
     if not desc['DomoType'][:1].isdigit():
@@ -460,6 +465,15 @@ def t2d(attr, value, type, subtype):
             # Domoticz distance needs cm but gets mm
             return 0, str(float(value)/10)
 
+    elif type == 250:
+        # Domoticz P1 meter needs nValue=0 and sValue="T1;T2;0.0;0.0,P,0"
+        # Удаляем квадратные скобки и разбиваем строку по запятой
+        numbers = value.strip('[]').split(',')
+        # Преобразуем строки в числа с плавающей точкой
+        T1 = float(numbers[0])
+        T2 = float(numbers[1])
+        return 0, "{};{};0.0;0.0,0,0".format(T1,T2)
+
     elif type == 113 and subtype in [0, 1, 2, 4]:
         # Energy, water and gas counters expected in Wh or l but come in as kWh or m³
         value = value * 1000
@@ -482,6 +496,7 @@ def updateValue(idx, attr, value):
 def updateStateDevices(fullName, cmndName, message):
     ret = False
     idxs = findDevices(fullName)
+    Debug('tasmota::updateStateDevices: message {}'.format(repr(message)))
     for attr, value in getStateDevices(message):
         idx = deviceByAttr(idxs, attr)
         if idx == None:
@@ -497,6 +512,7 @@ def updateStateDevices(fullName, cmndName, message):
 def updateResultDevice(fullName, message):
     idxs = findDevices(fullName)
     attr, value = next(iter(message.items()))
+    Debug('tasmota::updateResultDevices: message {}'.format(repr(message)))
     for idx in idxs:
         try:
             description = json.loads(Devices[idx].Description)
@@ -535,6 +551,7 @@ def updateSensorDevices(fullName, cmndName, message):
 
 # Update domoticz device description related to tasmota INFO1 message: Version and Module
 def updateInfo1Devices(fullName, cmndName, message):
+    Debug('tasmota::updateInfo1Devices: message {}'.format(repr(message)))
     try:
         if "Info1" in message:
             module = message["Info1"]["Module"]
@@ -569,6 +586,7 @@ def updateInfo1Devices(fullName, cmndName, message):
 
 # Update domoticz device names and description from friendly names of tasmota STATUS message (seen on boot)
 def updateStatusDevices(fullName, cmndName, message):
+    Debug('tasmota::updateStatusDevices: message {}'.format(repr(message)))
     try:
         names = message["Status"]["FriendlyName"]
 
