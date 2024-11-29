@@ -269,7 +269,7 @@ def getSensorDeviceState(states, sens, type, value):
     'UvPower':       {'Name': 'UV Power',      'Unit': 'W/m²', 'DomoType': 'Custom'},
 #    'Total':         {'Name': 'Total',         'Unit': 'kWh',  'DomoType': 'Custom'},
     'Total':         {'Name': 'Total',         'Unit': 'kWh',  'DomoType': '113;0;0'}, #0x71, ??? pTypeRFXMeter
-    'TotalTariff':   {'Name': 'Tariff',        'Unit': '',     'DomoType': '250;1;0'}, #pTypeP1Power,sTypeP1Power
+    'TotalTariff':   {'Name': 'P1',            'Unit': '',     'DomoType': '250;1;0'}, #pTypeP1Power,sTypeP1Power
     'Yesterday':     {'Name': 'Yesterday',     'Unit': 'kWh',  'DomoType': 'Custom'},
     'Today':         {'Name': 'Today',         'Unit': 'kWh',  'DomoType': 'Custom'},
     'Power':         {'Name': 'Power',         'Unit': 'kW',   'DomoType': 'Usage'},
@@ -472,7 +472,7 @@ def t2d(attr, value, type, subtype):
         # Преобразуем строки в числа с плавающей точкой
         #T1 = float(numbers[0])
         #T2 = float(numbers[1])
-        return 0, "{};{};0.0;0.0;0;0".format(value[0],value[1])
+        return 0, "{};{};0.0;0.0;{};0".format(value[0]*1000,value[1]*1000,value[2])
 
     elif type == 113 and subtype in [0, 1, 2, 4]:
         # Energy, water and gas counters expected in Wh or l but come in as kWh or m³
@@ -537,7 +537,14 @@ def updateSensorDevices(fullName, cmndName, message):
             if idx != None:
                 ret = True
         if idx != None:
-            updateValue(idx, attr, value)
+            if type == 'P1':
+                for sensor, type, value1, desc in getSensorDeviceStates(message):
+                    if type == 'Power':
+                        break
+                value.append(value1)
+                updateValue(idx, attr, value)
+            else
+                updateValue(idx, attr, value)
     return ret
 
 def updateSensorDevicesNew(fullName, cmndName, message):
