@@ -100,7 +100,7 @@ class Handler:
     # Process incoming MQTT messages from Tasmota devices
     # Call Update{subtopic}Devices() if it is potentially one of ours
     def onMQTTPublish(self, topic, message):
-        Debug("Handler::onMQTTPublish: topic: {}, self.topics: {}, self.subscriptions: {}".format(topic, self.topics, self.subscriptions))
+        # Debug("Handler::onMQTTPublish: topic: {}, self.topics: {}, self.subscriptions: {}".format(topic, self.topics, self.subscriptions))
         # self.topics: 'INFO1', 'STATE', 'SENSOR', 'RESULT', 'STATUS', 'STATUS5', 'STATUS8', 'STATUS11', 'ENERGY'
         # self.subscriptions: ['%prefix%/%topic%', '%topic%/%prefix%'] 
         # Check if we handle this topic tail at all (hardcoded list SENSOR, STATUS, ...)
