@@ -139,14 +139,15 @@ class Handler:
         fullName = '/'.join(fulltopic)
         cmndName = '/'.join(cmndtopic)
 
+
         # fullName should now contain all subtopic parts except for %prefix%es and tail
         # I.e. fullName is uniquely identifying the sensor or button referred by the message
-        Debug("Handler::onMQTTPublish: device: {}, cmnd: {}, tail: {}, message: {}".format(
-            fullName, cmndName, tail, str(message)))
 
-       
         if fullName not in self.tasmotaDevices:
             return True
+
+        Debug("Handler::onMQTTPublish: device: {}, cmnd: {}, tail: {}, message: {}".format(
+            fullName, cmndName, tail, str(message)))
 			
         if tail == 'STATE':  # POWER* status
             if updateStateDevices(fullName, cmndName, message):
