@@ -107,6 +107,8 @@ class Handler:
         subtopics = topic.split('/')
         tail = subtopics[-1]
         if tail not in self.topics:
+            Debug("Handler::onMQTTPublish: return reason: tail not in self.topics: tail: {}, topic: {}".format(
+                tail, str(topic)))
             return True
 
         # Different Tasmota devices can have different FullTopic patterns.
