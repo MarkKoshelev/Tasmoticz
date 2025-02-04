@@ -87,7 +87,8 @@ class Handler:
 
         return True
 
-    # Subscribe to our topics
+    # Subscribe to our topics 
+    # Z2T should use SetOption89 0 to subscribe short form: %prfix%/%topic%/%tail% (tele/MQTT_TOPIC_NAME/SENSOR)
     def onMQTTConnected(self):
         subs = []
         for topic in self.subscriptions:
@@ -106,10 +107,15 @@ class Handler:
         # Check if we handle this topic tail at all (hardcoded list SENSOR, STATUS, ...)
         subtopics = topic.split('/')
         tail = subtopics[-1]
-        if tail not in self.topics:
-            Debug("Handler::onMQTTPublish: return reason: tail not in self.topics: tail: {}, topic: {}".format(
-                tail, str(topic)))
+
+        if subtopics[1] not in self.tasmotaDevices:
             return True
+
+        if tail not in self.topics:
+            return True
+
+        Debug("Handler::onMQTTPublish: tail in self.tasmotaDevices: tail: {}, topic: {}".format(
+            tail, str(topic)))
 
         # Different Tasmota devices can have different FullTopic patterns.
         # All FullTopic patterns we care about are in self.subscriptions (plugin config)
@@ -121,6 +127,8 @@ class Handler:
         for subscription in self.subscriptions:
             patterns = subscription.split('/')
             for subtopic, pattern in zip(subtopics[:-1], patterns):
+                Debug("Handler::onMQTTPublish: for loop subtopic: {}, pattern: {}, message: {}".format(
+                    subtopic, pattern, str(message)))
                 if((pattern not in ('%topic%', '%prefix%', '+', subtopic)) or
                     (pattern == '%prefix%' and subtopic != self.prefix[2] and subtopic != self.prefix[3]) or
                         (pattern == '%topic%' and (subtopic == 'sonoff' or subtopic == 'tasmota'))):
@@ -287,7 +295,7 @@ def getSensorDeviceState(states, sens, type, value):
 #    P1 Smart Meter: 250,1,0 (hardware type)
 #    P1 Smart Meter: 250,1,0 (hardware type)
 #    'TotalTariff':   {'Name': 'TotalTariff',  'Unit': '',     'DomoType': '250;1;0'} #need to add Power value to sValue = "T1;T2;0.0;0.0,P,0";
-#    'TotalTariff':   {'Name': 'TotalTariff',   'Unit': '',     'DomoType': 'P1 Smart Meter'}
+#    'TotalTariff':   {'Name': 'TotalTariff',  'Unit': '',     'DomoType': 'P1 Smart Meter'}
     }
 
     if type in typeDb and value is not None:
@@ -297,26 +305,76 @@ def getSensorDeviceState(states, sens, type, value):
             desc['Sensor'] = 'Energy'
         states.append((sens, type, value, desc))
 
+def getZigbeeDeviceState(states, sens, attr, value):
+    typeDb = {
+    'Temperature':        {'Name': 'Temperature',   'Unit': '°C',   'DomoType': 'Temperature'},
+    'Humidity':           {'Name': 'Humidity',      'Unit': '%',    'DomoType': 'Humidity'},
+    'Pressure':           {'Name': 'Pressure',      'Unit': 'hPa',  'DomoType': 'Barometer'},
+    'Illuminance':        {'Name': 'Illuminance',   'Unit': 'lux',  'DomoType': 'Illumination'},
+    'ZoneStatusChange':   {'Name': 'ZoneStatus',    'Unit': '',     'DomoType': 'Switch'}, #Water sensor
+    'Power':              {'Name': 'Switch',        'Unit': '',     'DomoType': 'Switch'}, #
+    'UvIndex':       {'Name': 'UV Index',      'Unit': 'UVI',  'DomoType': 'Custom'},
+    'UvPower':       {'Name': 'UV Power',      'Unit': 'W/m²', 'DomoType': 'Custom'},
+    'Total':         {'Name': 'Total',         'Unit': 'kWh',  'DomoType': '113;0;0'}, #0x71, ??? pTypeRFXMeter
+    'TotalTariff':   {'Name': 'P1',            'Unit': '',     'DomoType': '250;1;0'}, #pTypeP1Power,sTypeP1Power
+    'Yesterday':     {'Name': 'Yesterday',     'Unit': 'kWh',  'DomoType': 'Custom'},
+    'Today':         {'Name': 'Today',         'Unit': 'kWh',  'DomoType': 'Custom'},
+    'ApparentPower': {'Name': 'ApparentPower', 'Unit': 'kW',   'DomoType': 'Usage'},
+    'ReactivePower': {'Name': 'ReactivePower', 'Unit': 'kW',   'DomoType': 'Usage'},
+    'Factor':        {'Name': 'Factor',        'Unit': 'W/VA', 'DomoType': 'Custom'},
+    'Frequency':     {'Name': 'Frequency',     'Unit': 'Hz',   'DomoType': 'Custom'},
+    'Voltage':       {'Name': 'Voltage',       'Unit': 'V',    'DomoType': 'Voltage'},
+    'Current':       {'Name': 'Current',       'Unit': 'A',    'DomoType': 'Current (Single)'},
+    'Range':         {'Name': 'Pressure',      'Unit': 'Bar',  'DomoType': 'Pressure'}, #hack: Analog Range treat prassure
+    'A':             {'Name': 'Pressure',      'Unit': 'Bar',  'DomoType': 'Pressure'}
+    }
+
+    if attr in typeDb and value is not None:
+        desc = typeDb[attr].copy()
+        desc['Sensor'] = sens
+        states.append((sens, attr, value, desc))
+
 # Возвращает массив значеий сенсоров устройсва.
 def getSensorDeviceStates(message):
     states = []
     if isinstance(message, collections.Mapping):
         for sensor, sensorData in message.items():
-            if isinstance(sensorData, collections.Mapping):
-                for type, value in sensorData.items():
-                    if sensor == 'ANALOG' :
-                        if isinstance(value, collections.Mapping):
-                            for value, value1 in value.items():
-                                getSensorDeviceState(states, type, value, value1)
+            Debug('tasmota::getSensorDeviceStates: sensor: {}, sensorData: {}'.format(sensor, sensorData))
+            if sensor == 'ZbReceived':
+                Debug('tasmota::getSensorDeviceStates: ZbReceived!!!')
+                if isinstance(sensorData, collections.Mapping):
+                    for ZbName, ZbMessage in sensorData.items():
+                        Debug('tasmota::getSensorDeviceStates: ZbReceived: ZbName: {}, ZbMessage: {}'.format(ZbName,ZbMessage ))
+                        if isinstance(ZbMessage, collections.Mapping):
+                            for ZbAttr, ZbValue in ZbMessage.items():
+                                Debug('tasmota::getSensorDeviceStates: ZbReceived: ZbAttr: {}, ZbValue: {}'.format(ZbAttr, ZbValue))
+                                getZigbeeDeviceState(states, ZbName, ZbAttr, ZbValue)
+                else:
+                    if isinstance(value, collections.Mapping):
+                        for ZbAttr, ZbValue in value.items():
+                            Debug('tasmota::getSensorDeviceStates: ZbReceived: ZbAttr: {}, ZbValue: {}'.format(ZbAttr, ZbValue))
+                            if ZbAttr == 'Name':
+                                ZbName = ZbValue
+                                for ZbAttr, ZbValue in value.items():
+                                    getZigbeeDeviceState(states, ZbName, ZbAttr, ZbValue)
+            else: 
+                if isinstance(sensorData, collections.Mapping):
+                    for type, value in sensorData.items():
+                        Debug('tasmota::getSensorDeviceStates: type: {}, value: {}'.format(type, value))
+                        if sensor == 'ANALOG' :
+                            if isinstance(value, collections.Mapping):
+                                for attr, value in value.items():
+                                    Debug('tasmota::getSensorDeviceStates: attr: {}, value {}'.format(attr, value))
+                                    getSensorDeviceState(states, type, attr, value)
+                            else:
+                                if(type.startswith('A')):
+#                                    v = float(value)/100
+                                    getSensorDeviceState(states,type,'A',value)
+                                elif(type.startswith('Range')):
+                                    v = float(value)/100
+                                    getSensorDeviceState(states,type,'Range',v)
                         else:
-                            if(type.startswith('A')):
-#                                v = float(value)/100
-                                getSensorDeviceState(states,type,'A',value)
-                            elif(type.startswith('Range')):
-                                v = float(value)/100
-                                getSensorDeviceState(states,type,'Range',v)
-                    else:
-                        getSensorDeviceState(states,sensor,type,value)
+                            getSensorDeviceState(states,sensor,type,value)
     return states
 
 
@@ -530,8 +588,9 @@ def updateSensorDevices(fullName, cmndName, message):
     ret = False
     idxs = findDevices(fullName)
     #   ENERGY, Voltage, 220 {Name: Voltage, Unit: V}
-    Debug('tasmota::updateSensorDevices: message {}'.format(repr(message)))
+    Debug('tasmota::updateSensorDevices: fullName {}, cmndName {}, message {}'.format(fullName, cmndName, repr(message)))
     for sensor, type, value, desc in getSensorDeviceStates(message):
+        Debug('tasmota::updateSensorDevices: sensor {}, type {}, value {}, desc {}'.format(sensor, type, value, desc))
         attr = '{}-{}'.format(sensor, type)
         idx = deviceByAttr(idxs, attr)
         if idx == None:
