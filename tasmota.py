@@ -453,7 +453,7 @@ def createStateDevice(fullName, cmndName, deviceAttr):
     if deviceAttr in ['POWER'] + ['POWER{}'.format(r) for r in range(1, 33)]:
         deviceHash = deviceId(fullName)
         deviceName = '{} {}'.format(fullName, deviceAttr)
-        description = {'Topic': cmndName, 'Command': deviceAttr, 'Device': 'Schalter'}
+        description = {'Topic': cmndName, 'Command': deviceAttr, 'Device': 'Switch'}
         if deviceAttr == 'POWER':
             description["Type"] = ""
         else:
@@ -631,10 +631,10 @@ def updateSensorDevices(fullName, cmnd, message):
                         for sensor, type, value1, desc in getSensorDeviceStates(sensorName,sensorData):
                             if desc['Name'] == 'Power':
                                 value.append(value1)
-                                updateValue(idx, attr, value)
+                                updateValue(idx, type, value)
                                 break
                     else:
-                        updateValue(idx, attr, value)
+                        updateValue(idx, type, value)
     return ret
 
 #def updateSensorDevicesNew(fullName, cmndName, message):

@@ -118,7 +118,7 @@ class Plugin:
             self.mqttClient.onConnect(Connection, Status, Description)
 
     def onDisconnect(self, Connection):
-        if self.mqttClient is not None:
+        if self.mqttClient.isConnected:
             self.mqttClient.onDisconnect(Connection)
 
     def onMessage(self, Connection, Data):
