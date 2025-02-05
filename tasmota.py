@@ -212,7 +212,7 @@ def findDevices(fullName):
 def getDeviceHash(fullName,z2t):
     deviceHash = deviceId(fullName)
     if z2t:
-        deviceHash = 'Z2T-{}'.format(deviceHash) 
+        deviceHash = '{}-Z2T'.format(deviceHash) 
     return deviceHash  
 
 def findDevicesByHash(deviceHash):
@@ -525,7 +525,10 @@ def createSensorDevice(fullName, deviceHash, cmnd, deviceAttr, desc):
 
 # Translate device value received form domoticz to tasmota attribute/value
 def d2t(attr, value):
-    if attr in ['POWER'] + ['POWER{}'.format(r) for r in range(1, 33)]:
+    attrs = attr.split('-')
+    if len(attrs) == 2:
+        attr = attrs[1]
+    if attr.upper() in ['POWER'] + ['POWER{}'.format(r) for r in range(1, 33)]:
         if value == "On":
             return "on"
         elif value == "Off":
@@ -535,10 +538,10 @@ def d2t(attr, value):
 # Translate values of a tasmota attribute to matching domoticz device value
 # result: nValue, sValue
 def t2d(attr, value, type, subtype):
-    if attr in ['POWER'] + ['POWER{}'.format(r) for r in range(1, 33)]:
-        if value == "ON":
+    if attr.upper() in ['POWER'] + ['POWER{}'.format(r) for r in range(1, 33)]:
+        if value == "ON" or value == 1 :
             return 1, "On"
-        elif value == "OFF":
+        elif value == "OFF" or value == 0:
             return 0, "Off"
 
     elif type == 81:
@@ -618,23 +621,23 @@ def updateSensorDevices(fullName, cmnd, message):
             deviceHash = getDeviceHash(fullName,z2t)
             idxs = findDevicesByHash(deviceHash)
 
-            for sensor, type, value, desc in getSensorDeviceStates(sensorName,sensorData):
+            for sensor, attr, value, desc in getSensorDeviceStates(sensorName,sensorData):
                 Debug('tasmota::updateSensorDevices: sensor {}, type {}, value {}, desc {}'.format(sensor, type, value, desc))
-                attr = '{}-{}'.format(sensor, type)
-                idx = deviceByAttr(idxs, attr)
+                unicAttr = '{}-{}'.format(sensor, attr)
+                idx = deviceByAttr(idxs, unicAttr)
                 if idx == None:
-                    idx = createSensorDevice(fullName, deviceHash, cmnd, attr, desc)
+                    idx = createSensorDevice(fullName, deviceHash, cmnd, unicAttr, desc)
                     if idx != None:
                         ret = True
                 if idx != None:
                     if desc['Name'] == 'P1 meter': #TotalTariff attribute found, need to add Power to value list
-                        for sensor, type, value1, desc in getSensorDeviceStates(sensorName,sensorData):
+                        for sensor, attr1, value1, desc in getSensorDeviceStates(sensorName,sensorData):
                             if desc['Name'] == 'Power':
                                 value.append(value1)
-                                updateValue(idx, type, value)
+                                updateValue(idx, attr, value)
                                 break
                     else:
-                        updateValue(idx, type, value)
+                        updateValue(idx, attr, value)
     return ret
 
 #def updateSensorDevicesNew(fullName, cmndName, message):
