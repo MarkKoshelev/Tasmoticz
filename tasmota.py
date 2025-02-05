@@ -80,12 +80,9 @@ class Handler:
             return False
 
         try:
-            self.mqttClient.publish(topic, msg)
-            
 # Z2T message: zbsend {"device":"Plug1","send":{"power":0}}
-     
-        Debug("Handler::onDomoticzCommand: topic: {}, msg: {}".format( topic, msg))
-
+            Debug("Handler::onDomoticzCommand: topic: {}, msg: {}".format( topic, msg))
+            self.mqttClient.publish(topic, msg)
         except Exception as e:
             Domoticz.Error("Handler::onDomoticzCommand: {}".format(str(e)))
             return False
@@ -219,6 +216,7 @@ def getDeviceHash(fullName,z2t):
     return deviceHash  
 
 def findDevicesByHash(deviceHash):
+    idxs = []
     for device in Devices:
         if Devices[device].DeviceID == deviceHash:
             idxs.append(device)
@@ -294,9 +292,8 @@ def getSensorDeviceState(states, sens, type, value):
     'UvLevel':       {'Name': 'UV Level',      'Unit': 'raw',  'DomoType': 'Custom'},
     'UvIndex':       {'Name': 'UV Index',      'Unit': 'UVI',  'DomoType': 'Custom'},
     'UvPower':       {'Name': 'UV Power',      'Unit': 'W/m²', 'DomoType': 'Custom'},
-#    'Total':         {'Name': 'Total',         'Unit': 'kWh',  'DomoType': 'Custom'},
     'Total':         {'Name': 'Total',         'Unit': 'kWh',  'DomoType': '113;0;0'}, #0x71, ??? pTypeRFXMeter
-    'TotalTariff':   {'Name': 'P1',            'Unit': '',     'DomoType': '250;1;0'}, #pTypeP1Power,sTypeP1Power
+    'TotalTariff':   {'Name': 'P1 meter',      'Unit': '',     'DomoType': '250;1;0'}, #pTypeP1Power,sTypeP1Power
     'Yesterday':     {'Name': 'Yesterday',     'Unit': 'kWh',  'DomoType': 'Custom'},
     'Today':         {'Name': 'Today',         'Unit': 'kWh',  'DomoType': 'Custom'},
     'Power':         {'Name': 'Power',         'Unit': 'kW',   'DomoType': 'Usage'},
@@ -408,7 +405,7 @@ def getSensorDeviceStates(sensorName, sensorData):
                             getSensorDeviceState(states,type,'Range',v)
                 else:
                     getSensorDeviceState(states,sensorName,type,value)
-return states
+    return states
 
 
 # Find the domoticz device unit id matching a STATE or SENSOR attribute coming from tasmota
@@ -612,32 +609,32 @@ def updateSensorDevices(fullName, cmnd, message):
     ret = False
     z2t = False
     if isinstance(message, collections.Mapping):
-    for sensorName, sensorData in message.items():
-        Debug('tasmota::updateSensorDevices: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
-        if sensorName == 'ZbReceived':
-            Debug('tasmota::updateSensorDevices: ZbReceived!!!')
-            z2t = True
+        for sensorName, sensorData in message.items():
+            Debug('tasmota::updateSensorDevices: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
+            if sensorName == 'ZbReceived':
+                Debug('tasmota::updateSensorDevices: ZbReceived!!!')
+                z2t = True
 
-        deviceHash = getDeviceHash(fullName,z2t)
-        idxs = findDevicesByHash(deviceHash)
+            deviceHash = getDeviceHash(fullName,z2t)
+            idxs = findDevicesByHash(deviceHash)
 
-        for sensor, type, value, desc in getSensorDeviceStates(sensorName,sensorData):
-            Debug('tasmota::updateSensorDevices: sensor {}, type {}, value {}, desc {}'.format(sensor, type, value, desc))
-            attr = '{}-{}'.format(sensor, type)
-            idx = deviceByAttr(idxs, attr)
-            if idx == None:
-                idx = createSensorDevice(fullName, deviceHash, cmnd, attr, desc)
+            for sensor, type, value, desc in getSensorDeviceStates(sensorName,sensorData):
+                Debug('tasmota::updateSensorDevices: sensor {}, type {}, value {}, desc {}'.format(sensor, type, value, desc))
+                attr = '{}-{}'.format(sensor, type)
+                idx = deviceByAttr(idxs, attr)
+                if idx == None:
+                    idx = createSensorDevice(fullName, deviceHash, cmnd, attr, desc)
+                    if idx != None:
+                        ret = True
                 if idx != None:
-                    ret = True
-            if idx != None:
-                if desc['Name'] == 'P1 meter': #TotalTariff attribute found, need to add Power to value list
-                    for sensor, type, value1, desc in getSensorDeviceStates(message):
-                        if desc['Name'] == 'Power':
-                            value.append(value1)
-                            updateValue(idx, attr, value)
-                            break
-                else:
-                    updateValue(idx, attr, value)
+                    if desc['Name'] == 'P1 meter': #TotalTariff attribute found, need to add Power to value list
+                        for sensor, type, value1, desc in getSensorDeviceStates(sensorName,sensorData):
+                            if desc['Name'] == 'Power':
+                                value.append(value1)
+                                updateValue(idx, attr, value)
+                                break
+                    else:
+                        updateValue(idx, attr, value)
     return ret
 
 #def updateSensorDevicesNew(fullName, cmndName, message):
