@@ -69,8 +69,8 @@ class Handler:
 
         try:
             description = json.loads(Devices[Unit].Description)
-            topic = '{}/{}'.format(description['Topic'],
-                                   description['Command'])
+#            topic = '{}/{}'.format(description['Topic'],
+#                                   description['Command'])
         except:
             return False
 
@@ -348,7 +348,6 @@ def getZigbeeDeviceState(states, sens, attr, value):
         desc['Sensor'] = sens
         states.append((sens, attr, value, desc))
 
-
 #combine Sensor Attributes before getZigbeeDeviceState
 def getZigbeeDeviceStateEx(states, attrList):
     for Attr, Value in attrList.items():
@@ -439,7 +438,7 @@ def deviceByAttr(idxs, attr):
 
 
 # Create a domoticz device from infos extracted out of tasmota STATE tele messages (POWER*)
-def createStateDevice(fullName, cmndName, deviceAttr):
+def createStateDevice(fullName, cmnd, deviceAttr):
     '''
     Create domoticz device for deviceName
     DeviceID is hash of fullName
@@ -453,7 +452,10 @@ def createStateDevice(fullName, cmndName, deviceAttr):
     if deviceAttr in ['POWER'] + ['POWER{}'.format(r) for r in range(1, 33)]:
         deviceHash = deviceId(fullName)
         deviceName = '{} {}'.format(fullName, deviceAttr)
-        description = {'Topic': cmndName, 'Command': deviceAttr, 'Device': 'Switch'}
+
+        cmnd = "{}/{}".format(cmnd,deviceAttr)
+
+        description = {'Topic': cmnd, 'Command': deviceAttr, 'Device': 'Switch'}
         if deviceAttr == 'POWER':
             description["Type"] = ""
         else:
@@ -467,7 +469,7 @@ def createStateDevice(fullName, cmndName, deviceAttr):
             Domoticz.Log("tasmota::createStateDevice: ID: {}, Name: {}, On: {}, Hash: {}".format(
                 idx, deviceName, fullName, deviceHash))
             return idx
-        Domoticz.Error("tasmota::createStateDevice: Failed creating Device ID: {}, Name: {}, On: {}".format(
+        Domoticz.Error("tasmota::createStateDevice: Failed creating Device ID: {}, deviceName: {}, fullName: {}".format(
             idx, deviceName, fullName))
 
     return None
@@ -490,6 +492,11 @@ def createSensorDevice(fullName, deviceHash, cmnd, deviceAttr, desc):
         deviceName = '{} {} {} {}'.format(fullName, desc['Sensor'], attrs[-2], desc['Name'])
     else:
         deviceName = '{} {} {}'.format(fullName, desc['Sensor'], desc['Name'])
+
+    if len(attrs) > 1:
+        attr = attrs[-1]
+        if(attr.Upper() == 'POWER':
+            cmnd = "{}/{}".format(cmnd,'ZbSend')
 
     description = {'Topic': cmnd, 'Command': deviceAttr,
                    'Device': desc['Sensor'], 'Type': desc['Name']}
@@ -526,8 +533,21 @@ def createSensorDevice(fullName, deviceHash, cmnd, deviceAttr, desc):
 # Translate device value received form domoticz to tasmota attribute/value
 def d2t(attr, value):
     attrs = attr.split('-')
-    if len(attrs) == 2:
-        attr = attrs[1]
+    if len(attrs) > 1 : #command to sensor device(zigbee2tasmots switch) formst: deviceName-Power
+# {"Device":"0x1234","Send":{"Power":0}}        
+# {"Name":"Switch1","Send":{"Power":0}}        
+        name = attrs[0]
+        attr = attrs[-1]
+        index = attr.rfind(attr)
+        name = attr[:index-1]
+        if attr.upper() == 'POWER':
+            msg = {}
+            msg['Name']=name
+            power = {}
+            power['Power']=attr
+            msg['Send']=power
+            return msg
+        
     if attr.upper() in ['POWER'] + ['POWER{}'.format(r) for r in range(1, 33)]:
         if value == "On":
             return "on"
