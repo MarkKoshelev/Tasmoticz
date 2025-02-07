@@ -69,6 +69,7 @@ class Handler:
 
         try:
             description = json.loads(Devices[Unit].Description)
+            topic = description['Topic']
 #            topic = '{}/{}'.format(description['Topic'],
 #                                   description['Command'])
         except:
@@ -81,7 +82,7 @@ class Handler:
 
         try:
 # Z2T message: zbsend {"device":"Plug1","send":{"power":0}}
-            Debug("Handler::onDomoticzCommand: topic: {}, msg: {}".format( topic, msg))
+            Debug("Handler::onDomoticzCommand: topic: {}, msg: {}".format(topic, msg))
             self.mqttClient.publish(topic, msg)
         except Exception as e:
             Domoticz.Error("Handler::onDomoticzCommand: {}".format(str(e)))
@@ -286,6 +287,7 @@ def getSensorDeviceState(states, sens, type, value):
     typeDb = {
     'Temperature':   {'Name': 'Temperature',   'Unit': '°C',   'DomoType': 'Temperature'},
     'Humidity':      {'Name': 'Humidity',      'Unit': '%',    'DomoType': 'Humidity'},
+    'Temp+Hum':      {'Name': 'Temp+Hum',      'Unit': '',     'DomoType': 'Temp+Hum'}, # combine Temp+Hum device if Temperature and Humidity exist in attr list
     'Pressure':      {'Name': 'Pressure',      'Unit': 'hPa',  'DomoType': 'Barometer'},
     'Illuminance':   {'Name': 'Illuminance',   'Unit': 'lux',  'DomoType': 'Illumination'},
     'Distance':      {'Name': 'Distance',      'Unit': 'mm ',  'DomoType': 'Distance'},
@@ -316,21 +318,23 @@ def getSensorDeviceState(states, sens, type, value):
         desc['Sensor'] = sens
         if sens == 'ENERGY':
             desc['Sensor'] = 'Energy'
+        desc['LinkQuality'] = None
         states.append((sens, type, value, desc))
 
-def getZigbeeDeviceState(states, sens, attr, value):
+def getZigbeeDeviceState(states, sens, attr, value, linkQuality):
     typeDb = {
     'Temperature':        {'Name': 'Temperature',   'Unit': '°C',   'DomoType': 'Temperature'},
     'Humidity':           {'Name': 'Humidity',      'Unit': '%',    'DomoType': 'Humidity'},
-    'Temp+Hum':           {'Name': 'Temp+Hum',      'Unit': '',     'DomoType': 'Temp+Hum'}, # Temp+Hum device if Temperature and Humidity exist in attr list
+    'Temp+Hum':           {'Name': 'Temp+Hum',      'Unit': '',     'DomoType': 'Temp+Hum'}, # combine Temp+Hum device if Temperature and Humidity exist in attr list
     'Pressure':           {'Name': 'Pressure',      'Unit': 'hPa',  'DomoType': 'Barometer'},
     'Illuminance':        {'Name': 'Illuminance',   'Unit': 'lux',  'DomoType': 'Illumination'},
     'ZoneStatusChange':   {'Name': 'ZoneStatus',    'Unit': '',     'DomoType': 'Switch'}, #Water sensor
+#    'LinkQuality':        {'Name': 'LinkQuality',   'Unit': '',     'DomoType': 'LinkQuality'}, #LinkQuality
     'Power':              {'Name': 'Switch',        'Unit': '',     'DomoType': 'Switch'}, #
     'UvIndex':            {'Name': 'UV Index',      'Unit': 'UVI',  'DomoType': 'Custom'},
     'UvPower':            {'Name': 'UV Power',      'Unit': 'W/m²', 'DomoType': 'Custom'},
     'Total':              {'Name': 'Total',         'Unit': 'kWh',  'DomoType': '113;0;0'}, #0x71, ??? pTypeRFXMeter
-    'TotalTariff':        {'Name': 'P1 meter',            'Unit': '',     'DomoType': '250;1;0'}, #pTypeP1Power,sTypeP1Power
+    'TotalTariff':        {'Name': 'P1 meter',      'Unit': '',     'DomoType': '250;1;0'}, #pTypeP1Power,sTypeP1Power
     'Yesterday':          {'Name': 'Yesterday',     'Unit': 'kWh',  'DomoType': 'Custom'},
     'Today':              {'Name': 'Today',         'Unit': 'kWh',  'DomoType': 'Custom'},
     'ApparentPower':      {'Name': 'ApparentPower', 'Unit': 'kW',   'DomoType': 'Usage'},
@@ -346,16 +350,17 @@ def getZigbeeDeviceState(states, sens, attr, value):
     if attr in typeDb and value is not None:
         desc = typeDb[attr].copy()
         desc['Sensor'] = sens
+        desc['LinkQuality'] = linkQuality
         states.append((sens, attr, value, desc))
 
 #combine Sensor Attributes before getZigbeeDeviceState
 def getZigbeeDeviceStateEx(states, attrList):
+    isTemp = False
+    isHum = False
+    linkQuality = None
     for Attr, Value in attrList.items():
-        Debug('tasmota::combineSensorAttributes: ZbReceived: Attr: {}, Value: {}'.format(Attr, Value))
         if Attr == 'Name':
             Name = Value
-        isTemp = False
-        isHum = False
         if Attr == 'Temperature':
             isTemp = True
             Temp = Value
@@ -365,14 +370,16 @@ def getZigbeeDeviceStateEx(states, attrList):
         if Attr == 'Pressure':
             isPress = True
             Press = Value
+        if Attr == 'LinkQuality':
+            linkQuality = round(float(int(Value) / 20))
 
     if isTemp and isHum:
         Attr = 'Temp+Hum'
-        Value = '[{};{}]'.format(Temp,int(round(float(Hum)))) # Domoticz humidity only accepted as integer 
-        getZigbeeDeviceState(states, Name, Attr, Value)
+        Value = "{};{};1".format(Temp,int(round(float(Hum)))) # Domoticz humidity only accepted as integer 
+        getZigbeeDeviceState(states, Name, Attr, Value, linkQuality)
     else:
         for Attr, Value in attrList.items():
-            getZigbeeDeviceState(states, Name, Attr, Value)
+            getZigbeeDeviceState(states, Name, Attr, Value, linkQuality)
 
 # Возвращает массив значеий сенсоров устройсва.
 def getSensorDeviceStates(sensorName, sensorData):
@@ -495,7 +502,7 @@ def createSensorDevice(fullName, deviceHash, cmnd, deviceAttr, desc):
 
     if len(attrs) > 1:
         attr = attrs[-1]
-        if(attr.Upper() == 'POWER':
+        if attr.upper() == 'POWER':
             cmnd = "{}/{}".format(cmnd,'ZbSend')
 
     description = {'Topic': cmnd, 'Command': deviceAttr,
@@ -534,20 +541,23 @@ def createSensorDevice(fullName, deviceHash, cmnd, deviceAttr, desc):
 def d2t(attr, value):
     attrs = attr.split('-')
     if len(attrs) > 1 : #command to sensor device(zigbee2tasmots switch) formst: deviceName-Power
-# {"Device":"0x1234","Send":{"Power":0}}        
-# {"Name":"Switch1","Send":{"Power":0}}        
+# {"Device":"0x1234","Send":{"Power":0}}
+# {"Name":"Switch1","Send":{"Power":0}}
         name = attrs[0]
         attr = attrs[-1]
-        index = attr.rfind(attr)
-        name = attr[:index-1]
+#        index = attr.rfind(attr)
+#        name = attr[:index-1]
         if attr.upper() == 'POWER':
             msg = {}
-            msg['Name']=name
+            msg['Device'] = name
             power = {}
-            power['Power']=attr
-            msg['Send']=power
-            return msg
-        
+            if value == "On":
+                power['Power'] = 1
+            elif value == "Off":
+                power['Power'] = 0
+            msg['Send'] = power
+            return json.dumps(msg)
+
     if attr.upper() in ['POWER'] + ['POWER{}'.format(r) for r in range(1, 33)]:
         if value == "On":
             return "on"
@@ -587,13 +597,18 @@ def t2d(attr, value, type, subtype):
     return 0, str(value)
 
 # Update a tasmota attributes value in its associated domoticz device idx
-def updateValue(idx, attr, value):
+def updateValue(idx, attr, value, signalLevel):
     nValue, sValue = t2d(attr, value, Devices[idx].Type, Devices[idx].SubType)
     if nValue != None and sValue != None:
         if Devices[idx].nValue != nValue or Devices[idx].sValue != sValue:
-            Debug("tasmota::updateValue: Idx:{}, Attr: {}, nValue: {}, sValue: {}".format(
-                idx, attr, nValue, sValue))
-            Devices[idx].Update(nValue=nValue, sValue=sValue)
+            Debug("tasmota::updateValue: Idx:{}, Attr: {}, nValue: {}, sValue: {}, signalLevel: {}".format(
+                idx, attr, nValue, sValue, signalLevel))
+            if signalLevel != None:
+                Devices[idx].Update(nValue=nValue, sValue=sValue, SignalLevel=signalLevel)
+            else:
+                Devices[idx].Update(nValue=nValue, sValue=sValue)
+
+#Devices[idx].Update(nValue=nValue, sValue=sValue, SignalLevel=10, BatteryLevel=100) # SignalLevel=0-10 BatteryLevel=0-100
 
 # Update domoticz device values related to tasmota STATE message (POWER*), create device if it does not exist yet
 # Returns true if a new device was created
@@ -608,7 +623,7 @@ def updateStateDevices(fullName, cmndName, message):
             if idx != None:
                 ret = True
         if idx != None:
-            updateValue(idx, attr, value)
+            updateValue(idx, attr, value, None)
     return ret
 
 
@@ -621,7 +636,7 @@ def updateResultDevice(fullName, message):
         try:
             description = json.loads(Devices[idx].Description)
             if description['Command'] == attr:
-                updateValue(idx, attr, value)
+                updateValue(idx, attr, value, None)
         except Exception as e:
             Domoticz.Error("tasmota::updateResultDevice: Update value for idx {} failed: {}".format(idx, str(e)))
 
@@ -654,10 +669,18 @@ def updateSensorDevices(fullName, cmnd, message):
                         for sensor, attr1, value1, desc in getSensorDeviceStates(sensorName,sensorData):
                             if desc['Name'] == 'Power':
                                 value.append(value1)
-                                updateValue(idx, attr, value)
+                                updateValue(idx, attr, value, desc['LinkQuality'])
                                 break
                     else:
-                        updateValue(idx, attr, value)
+                        updateValue(idx, attr, value, desc['LinkQuality'])
+
+                    if 'LinkQuality' in desc:
+                        Debug('tasmota::updateSensorDevices: LinkQuality: {}'.format(desc['LinkQuality']))
+#                        Devices[idx].Update(SignalLevel=desc['LinkQuality'])
+
+                    if 'BatteryLevel' in desc:
+                        Debug('tasmota::updateSensorDevices: BatteryLevel: {}'.format(desc['BatteryLevel']))
+#                        Devices[idx].Update(BatteryLevel=desc['BatteryLevel'])
     return ret
 
 #def updateSensorDevicesNew(fullName, cmndName, message):
