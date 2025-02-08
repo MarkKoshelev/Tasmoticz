@@ -316,8 +316,8 @@ def getSensorDeviceState(states, sens, type, value):
     if type in typeDb and value is not None:
         desc = typeDb[type].copy()
         desc['Sensor'] = sens
-        if sens == 'ENERGY':
-            desc['Sensor'] = 'Energy'
+#        if sens == 'ENERGY':
+#            desc['Sensor'] = 'Energy'
         desc['LinkQuality'] = None
         states.append((sens, type, value, desc))
 
@@ -381,11 +381,11 @@ def getSensorDeviceStates(sensorName, sensorData):
     else: 
         if isinstance(sensorData, collections.Mapping):
             for type, value in sensorData.items(): # type is typeDB[type]
-                Debug('tasmota::getSensorDeviceStates: type: {}, value: {}'.format(type, value))
+#                Debug('tasmota::getSensorDeviceStates: type: {}, value: {}'.format(type, value))
                 if sensorName == 'ANALOG' :
                     if isinstance(value, collections.Mapping):
                         for attr, value in value.items():
-                            Debug('tasmota::getSensorDeviceStates: attr: {}, value {}'.format(attr, value))
+                            Debug('tasmota::getSensorDeviceStates: ANALOG !!!: attr: {}, value {}'.format(attr, value))
                             getSensorDeviceState(states, type, attr, value)
                     else:
                         if(type.startswith('A')):
@@ -553,21 +553,23 @@ def d2t(attr, value):
 # Translate values of a tasmota attribute to matching domoticz device value
 # result: nValue, sValue
 def t2d(idx, attr, value):
-    type = Device[idx].Type
-    subtype = Device[idx].SubType
-   
+    type = Devices[idx].Type
+    subtype = Devices[idx].SubType
+
     if attr.upper() in ['POWER'] + ['POWER{}'.format(r) for r in range(1, 33)]:
         if value == "ON" or value == 1 :
             return 1, "On"
         elif value == "OFF" or value == 0:
             return 0, "Off"
     elif type == 0x52: #'Temp+Hum'
-        sValue = Device[idx].sValue
-        sValues.split(';')
+        sValue = Devices[idx].sValue
+        sValues = sValue.split(';')
         if attr == 'Temperature':
-            return 0, "{};{};{}",format(value,sValues[1],sValues[2])
+            Debug("tasmota::t2d:Temperature: sValue: {}, sValues: {}".format(sValue,sValues))
+            return 0, "{};{};{}".format(value,sValues[1],sValues[2])
         if attr == 'Humidity':
-            return 0, "{};{};{}",format(sValues[0],int(round(float(value))),sValues[2])
+            Debug("tasmota::t2d:Humidity: sValue: {}, sValues: {}".format(sValue,sValues))
+            return 0, "{};{};{}".format(sValues[0],int(round(float(value))),sValues[2])
     elif type == 81:
         # Domoticz humidity only accepted as integer
         return int(round(float(value))), "0"
@@ -632,14 +634,14 @@ def updateResultDevice(fullName, message):
             Domoticz.Error("tasmota::updateResultDevice: Update value for idx {} failed: {}".format(idx, str(e)))
 
 
-def deviceByNameType(idxs, deviceName, attrType):
+def deviceByNameType(idxs, deviceName, attrName):
     for idx in idxs:
         try:
             description = json.loads(Devices[idx].Description)
             if description['Device'] == deviceName:
-                if description['Type'] == attrType
+                if description['Type'] == attrName:
                     return idx
-                elif (attrType == 'Temperature' or attrType == 'Humidity') and description['Type'] == 'Temp+Hum' :
+                elif (attrName == 'Temperature' or attrName == 'Humidity') and description['Type'] == 'Temp+Hum' :
                     return idx
         except:
             pass
@@ -662,9 +664,9 @@ def updateSensorDevices(fullName, cmnd, message):
             idxs = findDevicesByHash(deviceHash)
 
             for sensor, attr, value, desc in getSensorDeviceStates(sensorName,sensorData):
-                Debug('tasmota::updateSensorDevices: sensor {}, type {}, value {}, desc {}'.format(sensor, type, value, desc))
+                Debug('tasmota::updateSensorDevices: sensor {}, type {}, value {}, desc {}'.format(sensor, attr, value, desc))
                 unicAttr = '{}-{}'.format(sensor, attr) #unicAttr = <Device name>-<attribute>
-                idx = deviceByNameType(idxs, sensor, attr)
+                idx = deviceByNameType(idxs, sensor, desc['Name'])
                 if idx == None:
                     idx = createSensorDevice(fullName, deviceHash, cmnd, unicAttr, desc)
                     if idx != None:
