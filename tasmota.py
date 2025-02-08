@@ -326,25 +326,10 @@ def getZigbeeDeviceState(states, sens, attr, value, linkQuality):
     'Temperature':        {'Name': 'Temperature',   'Unit': '°C',   'DomoType': 'Temperature'},
     'Humidity':           {'Name': 'Humidity',      'Unit': '%',    'DomoType': 'Humidity'},
     'Temp+Hum':           {'Name': 'Temp+Hum',      'Unit': '',     'DomoType': 'Temp+Hum'}, # combine Temp+Hum device if Temperature and Humidity exist in attr list
-    'Pressure':           {'Name': 'Pressure',      'Unit': 'hPa',  'DomoType': 'Barometer'},
-    'Illuminance':        {'Name': 'Illuminance',   'Unit': 'lux',  'DomoType': 'Illumination'},
-    'ZoneStatusChange':   {'Name': 'ZoneStatus',    'Unit': '',     'DomoType': 'Switch'}, #Water sensor
-#    'LinkQuality':        {'Name': 'LinkQuality',   'Unit': '',     'DomoType': 'LinkQuality'}, #LinkQuality
-    'Power':              {'Name': 'Switch',        'Unit': '',     'DomoType': 'Switch'}, #
-    'UvIndex':            {'Name': 'UV Index',      'Unit': 'UVI',  'DomoType': 'Custom'},
-    'UvPower':            {'Name': 'UV Power',      'Unit': 'W/m²', 'DomoType': 'Custom'},
-    'Total':              {'Name': 'Total',         'Unit': 'kWh',  'DomoType': '113;0;0'}, #0x71, ??? pTypeRFXMeter
-    'TotalTariff':        {'Name': 'P1 meter',      'Unit': '',     'DomoType': '250;1;0'}, #pTypeP1Power,sTypeP1Power
-    'Yesterday':          {'Name': 'Yesterday',     'Unit': 'kWh',  'DomoType': 'Custom'},
-    'Today':              {'Name': 'Today',         'Unit': 'kWh',  'DomoType': 'Custom'},
-    'ApparentPower':      {'Name': 'ApparentPower', 'Unit': 'kW',   'DomoType': 'Usage'},
-    'ReactivePower':      {'Name': 'ReactivePower', 'Unit': 'kW',   'DomoType': 'Usage'},
-    'Factor':             {'Name': 'Factor',        'Unit': 'W/VA', 'DomoType': 'Custom'},
-    'Frequency':          {'Name': 'Frequency',     'Unit': 'Hz',   'DomoType': 'Custom'},
-    'Voltage':            {'Name': 'Voltage',       'Unit': 'V',    'DomoType': 'Voltage'},
-    'Current':            {'Name': 'Current',       'Unit': 'A',    'DomoType': 'Current (Single)'},
-    'Range':              {'Name': 'Pressure',      'Unit': 'Bar',  'DomoType': 'Pressure'}, #hack: Analog Range treat prassure
-    'A':                  {'Name': 'Pressure',      'Unit': 'Bar',  'DomoType': 'Pressure'}
+    'ZoneStatusChange':   {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    # Water sensor
+    'ZoneStatus':         {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    # Motion sensor
+    'Contact':            {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    # Door sensor
+    'Power':              {'Name': 'Switch',        'Unit': '',     'DomoType': 'Switch'}    # Switch
     }
 
     if attr in typeDb and value is not None:
@@ -567,17 +552,25 @@ def d2t(attr, value):
 
 # Translate values of a tasmota attribute to matching domoticz device value
 # result: nValue, sValue
-def t2d(attr, value, type, subtype):
+def t2d(idx, attr, value):
+    type = Device[idx].Type
+    subtype = Device[idx].SubType
+   
     if attr.upper() in ['POWER'] + ['POWER{}'.format(r) for r in range(1, 33)]:
         if value == "ON" or value == 1 :
             return 1, "On"
         elif value == "OFF" or value == 0:
             return 0, "Off"
-
+    elif type == 0x52: #'Temp+Hum'
+        sValue = Device[idx].sValue
+        sValues.split(';')
+        if attr == 'Temperature':
+            return 0, "{};{};{}",format(value,sValues[1],sValues[2])
+        if attr == 'Humidity':
+            return 0, "{};{};{}",format(sValues[0],int(round(float(value))),sValues[2])
     elif type == 81:
         # Domoticz humidity only accepted as integer
         return int(round(float(value))), "0"
-
     elif type == 243:
         if subtype == 26:
             # Domoticz barometer needs nValue=0 and sValue="pressure;5"
@@ -585,11 +578,9 @@ def t2d(attr, value, type, subtype):
         if subtype == 27:
             # Domoticz distance needs cm but gets mm
             return 0, str(float(value)/10)
-
     elif type == 250: # Domoticz P1 meter
         # Domoticz P1 meter needs nValue=0 and sValue="T1;T2;0.0;0.0,P,0"
         return 0, "{};{};0.0;0.0;{};0".format(value[0]*1000,value[1]*1000,value[2])
-
     elif type == 113 and subtype in [0, 1, 2, 4]:
         # Energy, water and gas counters expected in Wh or l but come in as kWh or m³
         value = value * 1000
@@ -598,7 +589,7 @@ def t2d(attr, value, type, subtype):
 
 # Update a tasmota attributes value in its associated domoticz device idx
 def updateValue(idx, attr, value, signalLevel):
-    nValue, sValue = t2d(attr, value, Devices[idx].Type, Devices[idx].SubType)
+    nValue, sValue = t2d(idx, attr, value)
     if nValue != None and sValue != None:
         if Devices[idx].nValue != nValue or Devices[idx].sValue != sValue:
             Debug("tasmota::updateValue: Idx:{}, Attr: {}, nValue: {}, sValue: {}, signalLevel: {}".format(
@@ -641,6 +632,20 @@ def updateResultDevice(fullName, message):
             Domoticz.Error("tasmota::updateResultDevice: Update value for idx {} failed: {}".format(idx, str(e)))
 
 
+def deviceByNameType(idxs, deviceName, attrType):
+    for idx in idxs:
+        try:
+            description = json.loads(Devices[idx].Description)
+            if description['Device'] == deviceName:
+                if description['Type'] == attrType
+                    return idx
+                elif (attrType == 'Temperature' or attrType == 'Humidity') and description['Type'] == 'Temp+Hum' :
+                    return idx
+        except:
+            pass
+    return None
+
+
 # Update domoticz device values related to tasmota SENSOR message, create device if it does not exist yet
 # Returns true if a new device was created
 def updateSensorDevices(fullName, cmnd, message):
@@ -658,8 +663,8 @@ def updateSensorDevices(fullName, cmnd, message):
 
             for sensor, attr, value, desc in getSensorDeviceStates(sensorName,sensorData):
                 Debug('tasmota::updateSensorDevices: sensor {}, type {}, value {}, desc {}'.format(sensor, type, value, desc))
-                unicAttr = '{}-{}'.format(sensor, attr)
-                idx = deviceByAttr(idxs, unicAttr)
+                unicAttr = '{}-{}'.format(sensor, attr) #unicAttr = <Device name>-<attribute>
+                idx = deviceByNameType(idxs, sensor, attr)
                 if idx == None:
                     idx = createSensorDevice(fullName, deviceHash, cmnd, unicAttr, desc)
                     if idx != None:
