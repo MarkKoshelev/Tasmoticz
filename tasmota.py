@@ -256,23 +256,10 @@ def getStateDevices(message):
 #MQT: tele/D1-HAIER-POW/SENSOR = {"Time":"2024-11-12T23:01:05",
 #"ENERGY":
 # {"TotalStartTime":"2024-02-20T22:54:12",
-# "Total":711.792,"TotalTariff":[96.965,614.826],
-# "Yesterday":9.928,"Today":10.541,"Period":12,
-# "Power":734,"ApparentPower":769,"ReactivePower":230,"Factor":0.95,
-# "Voltage":242,"Current":3.182}}
-
-#MQT: tele/D3-ELUX-POW/SENSOR = {"Time":"2024-11-12T23:03:50",
-#"ENERGY":
-#{"TotalStartTime":"2021-12-18T16:50:32",
-# "Total":6821.566,
-# "Yesterday":14.113,"Today":17.887,"Period":27,
-# "Power":1666,"ApparentPower":1718,"ReactivePower":420,"Factor":0.97,
-# "Voltage":234,"Current":7.345}}
+# "Total":711.792,"TotalTariff":[96.965,614.826], "Yesterday":9.928,"Today":10.541,"Period":12, "Power":734,"ApparentPower":769,"ReactivePower":230,"Factor":0.95, "Voltage":242,"Current":3.182}}
 
 #MQT: tele/D3-H12KW/SENSOR = {"Time":"2024-11-24T22:07:28",
-#"ANALOG":
-#{"CTEnergy1":{"Energy":62.962,"Power":2,"Voltage":220,"Current":0.010},
-#"Range5":188},
+#"ANALOG": {"CTEnergy1":{"Energy":62.962,"Power":2,"Voltage":220,"Current":0.010}, "Range5":188},
 #"DS18B20-1":{"Id":"3C01F09620CB","Temperature":38.2},
 #"DS18B20-2":{"Id":"1DA15B1E64FF","Temperature":37.6},
 #"TempUnit":"C"}
@@ -283,7 +270,7 @@ def getStateDevices(message):
 
 # https://www.b4x.com/android/forum/threads/rrfxmeter.139786/
  
-def getSensorDeviceState(states, sens, type, value):
+def getSensorDeviceState(states, sensName, attr, value, linkQuality):
     typeDb = {
     'Temperature':   {'Name': 'Temperature',   'Unit': '°C',   'DomoType': 'Temperature'},
     'Humidity':      {'Name': 'Humidity',      'Unit': '%',    'DomoType': 'Humidity'},
@@ -305,44 +292,28 @@ def getSensorDeviceState(states, sens, type, value):
     'Frequency':     {'Name': 'Frequency',     'Unit': 'Hz',   'DomoType': 'Custom'},
     'Voltage':       {'Name': 'Voltage',       'Unit': 'V',    'DomoType': 'Voltage'},
     'Current':       {'Name': 'Current',       'Unit': 'A',    'DomoType': 'Current (Single)'},
-    'Range':         {'Name': 'Pressure',      'Unit': 'Bar',  'DomoType': 'Pressure'}, #hack: Analog Range treat prassure
-    'A':             {'Name': 'Pressure',      'Unit': 'Bar',  'DomoType': 'Pressure'}
+    'Range':         {'Name': 'Pressure',      'Unit': 'Bar',  'DomoType': 'Pressure'}  #hack: Analog Range treat pressure
 #    P1 Smart Meter: 250,1,0 (hardware type)
 #    P1 Smart Meter: 250,1,0 (hardware type)
 #    'TotalTariff':   {'Name': 'TotalTariff',  'Unit': '',     'DomoType': '250;1;0'} #need to add Power value to sValue = "T1;T2;0.0;0.0,P,0";
 #    'TotalTariff':   {'Name': 'TotalTariff',  'Unit': '',     'DomoType': 'P1 Smart Meter'}
     }
 
-    if type in typeDb and value is not None:
-        desc = typeDb[type].copy()
-        desc['Sensor'] = sens
+    if attr in typeDb and value is not None:
+        desc = typeDb[attr].copy()
+        desc['Sensor'] = sensName
+        desc['LinkQuality'] = linkQuality
 #        if sens == 'ENERGY':
 #            desc['Sensor'] = 'Energy'
         desc['LinkQuality'] = None
-        states.append((sens, type, value, desc))
-
-def getZigbeeDeviceState(states, sens, attr, value, linkQuality):
-    typeDb = {
-    'Temperature':        {'Name': 'Temperature',   'Unit': '°C',   'DomoType': 'Temperature'},
-    'Humidity':           {'Name': 'Humidity',      'Unit': '%',    'DomoType': 'Humidity'},
-    'Temp+Hum':           {'Name': 'Temp+Hum',      'Unit': '',     'DomoType': 'Temp+Hum'}, # combine Temp+Hum device if Temperature and Humidity exist in attr list
-    'ZoneStatusChange':   {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    # Water sensor
-    'ZoneStatus':         {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    # Motion sensor
-    'Contact':            {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    # Door sensor
-    'Power':              {'Name': 'Switch',        'Unit': '',     'DomoType': 'Switch'}    # Switch
-    }
-
-    if attr in typeDb and value is not None:
-        desc = typeDb[attr].copy()
-        desc['Sensor'] = sens
-        desc['LinkQuality'] = linkQuality
         states.append((sens, attr, value, desc))
 
-#combine Sensor Attributes before getZigbeeDeviceState
-def getZigbeeDeviceStateEx(states, attrList):
+#combine Sensor Attributes before
+def getComposeAttr(attrList):
     isTemp = False
     isHum = False
     linkQuality = None
+    Attr = None
     for Attr, Value in attrList.items():
         if Attr == 'Name':
             Name = Value
@@ -361,43 +332,72 @@ def getZigbeeDeviceStateEx(states, attrList):
     if isTemp and isHum:
         Attr = 'Temp+Hum'
         Value = "{};{};1".format(Temp,int(round(float(Hum)))) # Domoticz humidity only accepted as integer 
-        getZigbeeDeviceState(states, Name, Attr, Value, linkQuality)
-    else:
+    return Attr,Value,linkQuality
+
+def getSensorDeviceStateEx(states, attrList):
+    Attr,Value,linkQuality = getComposeAttr(attrList)
+    if Attr == None # not compose attribute
         for Attr, Value in attrList.items():
-            getZigbeeDeviceState(states, Name, Attr, Value, linkQuality)
+            getSensorDeviceState(states, Name, Attr, Value, linkQuality)
+        else:
+            getSensorDeviceState(states, Name, Attr, Value, linkQuality)
+
+def getZigbeeDeviceState(states, attr, value, linkQuality):
+    typeDb = {
+    'Temperature':        {'Name': 'Temperature',   'Unit': '°C',   'DomoType': 'Temperature'},
+    'Humidity':           {'Name': 'Humidity',      'Unit': '%',    'DomoType': 'Humidity'},
+    'Temp+Hum':           {'Name': 'Temp+Hum',      'Unit': '',     'DomoType': 'Temp+Hum'}, # combine Temp+Hum device if Temperature and Humidity exist in attr list
+    'ZoneStatusChange':   {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    # Water sensor
+    'ZoneStatus':         {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    # Motion sensor
+    'Contact':            {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    # Door sensor
+    'Power':              {'Name': 'Switch',        'Unit': '',     'DomoType': 'Switch'}    # Switch
+    }
+
+    if attr in typeDb and value is not None:
+        desc = typeDb[attr].copy()
+        desc['LinkQuality'] = linkQuality
+        states.append((sens, attr, value, desc))
+
+
+def getZigbeeDeviceStateEx(states, attrList):
+    Attr,Value,linkQuality = getComposeAttr(attrList)
+    if Attr == None
+        for Attr, Value in attrList.items():
+            getZigbeeDeviceState(states, Attr, Value, linkQuality)
+        else:
+            getZigbeeDeviceState(states, Attr, Value, linkQuality)
 
 # Возвращает массив значеий сенсоров устройсва.
 def getSensorDeviceStates(sensorName, sensorData):
     states = []
     Debug('tasmota::getSensorDeviceStates: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
-    if sensorName == 'ZbReceived':
+    if sensorName == 'ZbReceived': #zigbee2tasmota sensor
         if isinstance(sensorData, collections.Mapping):
             for deviceName, AttrList in sensorData.items(): # deviceName skipped, used from sensorData
-                Debug('tasmota::getSensorDeviceStates: ZbReceived: deviceName: {}, AttrList: {}'.format(deviceName, AttrList ))
                 if isinstance(AttrList, collections.Mapping):
                     getZigbeeDeviceStateEx(states, AttrList)
         else: # no device name in message (SetOption83 1 ???) sensorData is attribute list
             getZigbeeDeviceStateEx(states, sensorData)
-    else: 
+    elif sensorName == 'ANALOG':
         if isinstance(sensorData, collections.Mapping):
-            for type, value in sensorData.items(): # type is typeDB[type]
-#                Debug('tasmota::getSensorDeviceStates: type: {}, value: {}'.format(type, value))
-                if sensorName == 'ANALOG' :
-                    if isinstance(value, collections.Mapping):
-                        for attr, value in value.items():
-                            Debug('tasmota::getSensorDeviceStates: ANALOG !!!: attr: {}, value {}'.format(attr, value))
-                            getSensorDeviceState(states, type, attr, value)
-                    else:
-                        if(type.startswith('A')):
-#                           v = float(value)/100
-                            getSensorDeviceState(states,type,'A',value)
-                        elif(type.startswith('Range')):
-                            v = float(value)/100
-                            getSensorDeviceState(states,type,'Range',v)
-                else:
-                    getSensorDeviceState(states,sensorName,type,value)
+            for sensor, value in sensorData.items():
+                if sensor.startswith('CTEnergy') and isinstance(value, collections.Mapping):
+#                  sensor: "CTEnergy1, CTEnergy2..."
+                    getSensorDeviceStateEx(states,sensor,value)
+                else: 
+                    if sensor.startswith('Range'): # Range1,Range2 ...
+                        value = float(value)/100
+                        getSensorDeviceState(states,sensor,'Range',value,None)
+                    elif(sensor.startswith('A')): #Analog A1,A2 ...
+                        getSensorDeviceState(states,sensor,'Range',value)
+                    elif(sensor.startswith('Temperature'))                    
+                        getSensorDeviceState(states,sensor,'Temperature',value,None)
+                    elif(sensor.startswith('Light'))                    
+                        getSensorDeviceState(states,sensor,'Illuminance',value,None)
+    else: #all others sensors
+        if isinstance(sensorData, collections.Mapping):
+            getSensorDeviceStateEx(states,sensorName,sensorData)
     return states
-
 
 # Find the domoticz device unit id matching a STATE or SENSOR attribute coming from tasmota
 def deviceByAttr(idxs, attr):
@@ -409,7 +409,6 @@ def deviceByAttr(idxs, attr):
         except:
             pass
     return None
-
 
 # Some domoticz device Create(), Update() and query value examples
 #
@@ -427,7 +426,6 @@ def deviceByAttr(idxs, attr):
 #  curval = Devices[iUnit].sValue
 #  Domoticz.Device(Name=unitname, Unit=iUnit,Type=241, Subtype=3, Switchtype=7, Used=1,DeviceID=unitname).Create() # create Color White device
 #  Domoticz.Device(Name=unitname, Unit=iUnit,Type=241, Subtype=6, Switchtype=7, Used=1,DeviceID=unitname).Create() # create RGBZW device
-
 
 # Create a domoticz device from infos extracted out of tasmota STATE tele messages (POWER*)
 def createStateDevice(fullName, cmnd, deviceAttr):
@@ -485,7 +483,7 @@ def createSensorDevice(fullName, deviceHash, cmnd, deviceAttr, desc):
     else:
         deviceName = '{} {} {}'.format(fullName, desc['Sensor'], desc['Name'])
 
-    if len(attrs) > 1:
+    if len(attrs) > 1: #zigbee device type
         attr = attrs[-1]
         if attr.upper() == 'POWER':
             cmnd = "{}/{}".format(cmnd,'ZbSend')
@@ -502,6 +500,7 @@ def createSensorDevice(fullName, deviceHash, cmnd, deviceAttr, desc):
         deviceName, fullName, deviceHash))
 
     if not desc['DomoType'][:1].isdigit():
+        # Create device by string TypeName
         Domoticz.Device(Name=deviceName, Unit=idx, TypeName=desc['DomoType'], Used=1, Options=options,
             Description=json.dumps(description, indent=2, ensure_ascii=False), DeviceID=deviceHash).Create()
     else:
@@ -527,7 +526,7 @@ def d2t(attr, value):
     attrs = attr.split('-')
     if len(attrs) > 1 : #command to sensor device(zigbee2tasmots switch) formst: deviceName-Power
 # {"Device":"0x1234","Send":{"Power":0}}
-# {"Name":"Switch1","Send":{"Power":0}}
+# {"Device":"Switch1","Send":{"Power":0}}
         name = attrs[0]
         attr = attrs[-1]
 #        index = attr.rfind(attr)
@@ -689,30 +688,6 @@ def updateSensorDevices(fullName, cmnd, message):
                         Debug('tasmota::updateSensorDevices: BatteryLevel: {}'.format(desc['BatteryLevel']))
 #                        Devices[idx].Update(BatteryLevel=desc['BatteryLevel'])
     return ret
-
-#def updateSensorDevicesNew(fullName, cmndName, message):
-#    ret = False
-#    idxs = findDevices(fullName)
-#    #   ENERGY, Voltage, 220 {Name: Voltage, Unit: V}
-#    Debug('tasmota::updateSensorDevices: message {}'.format(repr(message)))
-#    for sensor, type, values, desc in getSensorDeviceStates(message):
-#        # Check if sensor reports more than one value (e.g. dual energy meter)
-#        if not isinstance(values, list):
-#            values = [values]
-#        items = len(values)
-#        for i, value in enumerate(values):
-#            if items > 1:
-#                attr = '{}-{}-{}'.format(sensor, i+1, type)
-#            else:
-#                attr = '{}-{}'.format(sensor, type)
-#            idx = deviceByAttr(idxs, attr)
-#            if idx == None:
-#                idx = createSensorDevice(fullName, cmndName, attr, desc)
-#                if idx != None:
-#                    ret = True
-#            if idx != None:
-#                updateValue(idx, attr, value)
-#    return ret
 
 
 # Update domoticz device description related to tasmota INFO1 message: Version and Module
