@@ -161,7 +161,6 @@ class Handler:
 
         Debug("Handler::onMQTTPublish: device: {}, cmnd: {}, tail: {}, message: {}".format(
             fullName, cmnd, tail, str(message)))
-			
         if tail == 'STATE':  # POWER* status
             if updateStateDevices(fullName, cmnd, message):
                 self.requestStatus(cmnd)
@@ -306,17 +305,19 @@ def getSensorDeviceState(states, sensName, attr, value, linkQuality):
 #        if sens == 'ENERGY':
 #            desc['Sensor'] = 'Energy'
         desc['LinkQuality'] = None
-        states.append((sens, attr, value, desc))
+        states.append((sensName, attr, value, desc))
 
 #combine Sensor Attributes before
 def getComposeAttr(attrList):
     isTemp = False
     isHum = False
     linkQuality = None
-    Attr = None
+    composeAttr = None
+    composeValue = None
+    sensorName = None
     for Attr, Value in attrList.items():
         if Attr == 'Name':
-            Name = Value
+            sensorName = Value
         if Attr == 'Temperature':
             isTemp = True
             Temp = Value
@@ -330,19 +331,20 @@ def getComposeAttr(attrList):
             linkQuality = round(float(int(Value) / 20))
 
     if isTemp and isHum:
-        Attr = 'Temp+Hum'
-        Value = "{};{};1".format(Temp,int(round(float(Hum)))) # Domoticz humidity only accepted as integer 
-    return Attr,Value,linkQuality
+        composeAttr = 'Temp+Hum'
+        composeValue = "{};{};1".format(Temp,int(round(float(Hum)))) # Domoticz humidity only accepted as integer 
+    return sensorName,composeAttr,composeValue,linkQuality
 
-def getSensorDeviceStateEx(states, attrList):
-    Attr,Value,linkQuality = getComposeAttr(attrList)
-    if Attr == None # not compose attribute
+def getSensorDeviceStateEx(states, sensorName, attrList):
+    dummyName,Attr,Value,linkQuality = getComposeAttr(attrList)
+    Debug('tasmota::getSensorDeviceStatesEx: sensorName: {}, Attr: {}, Value: {}'.format(sensorName, Attr, Value))
+    if Attr == None: # not compose attribute
         for Attr, Value in attrList.items():
-            getSensorDeviceState(states, Name, Attr, Value, linkQuality)
-        else:
-            getSensorDeviceState(states, Name, Attr, Value, linkQuality)
+            getSensorDeviceState(states, sensorName, Attr, Value, linkQuality)
+    else:
+        getSensorDeviceState(states, sensorName, Attr, Value, linkQuality)
 
-def getZigbeeDeviceState(states, attr, value, linkQuality):
+def getZigbeeDeviceState(states, sensName, attr, value, linkQuality):
     typeDb = {
     'Temperature':        {'Name': 'Temperature',   'Unit': '°C',   'DomoType': 'Temperature'},
     'Humidity':           {'Name': 'Humidity',      'Unit': '%',    'DomoType': 'Humidity'},
@@ -355,23 +357,25 @@ def getZigbeeDeviceState(states, attr, value, linkQuality):
 
     if attr in typeDb and value is not None:
         desc = typeDb[attr].copy()
+        desc['Sensor'] = sensName
         desc['LinkQuality'] = linkQuality
-        states.append((sens, attr, value, desc))
+        states.append((sensName, attr, value, desc))
 
 
 def getZigbeeDeviceStateEx(states, attrList):
-    Attr,Value,linkQuality = getComposeAttr(attrList)
-    if Attr == None
+    sensorName,Attr,Value,linkQuality = getComposeAttr(attrList)
+    Debug('tasmota::getZigbeeDeviceStateEx: sensorName: {}, Attr: {}, Value: {}'.format(sensorName, Attr, Value))
+    if Attr == None:
         for Attr, Value in attrList.items():
-            getZigbeeDeviceState(states, Attr, Value, linkQuality)
-        else:
-            getZigbeeDeviceState(states, Attr, Value, linkQuality)
+            getZigbeeDeviceState(states, sensorName, Attr, Value, linkQuality)
+    else:
+        getZigbeeDeviceState(states, sensorName, Attr, Value, linkQuality)
 
 # Возвращает массив значеий сенсоров устройсва.
 def getSensorDeviceStates(sensorName, sensorData):
     states = []
-    Debug('tasmota::getSensorDeviceStates: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
     if sensorName == 'ZbReceived': #zigbee2tasmota sensor
+        Debug('tasmota::getSensorDeviceStates:ZbReceived: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
         if isinstance(sensorData, collections.Mapping):
             for deviceName, AttrList in sensorData.items(): # deviceName skipped, used from sensorData
                 if isinstance(AttrList, collections.Mapping):
@@ -379,6 +383,7 @@ def getSensorDeviceStates(sensorName, sensorData):
         else: # no device name in message (SetOption83 1 ???) sensorData is attribute list
             getZigbeeDeviceStateEx(states, sensorData)
     elif sensorName == 'ANALOG':
+        Debug('tasmota::getSensorDeviceStates:ANALOG: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
         if isinstance(sensorData, collections.Mapping):
             for sensor, value in sensorData.items():
                 if sensor.startswith('CTEnergy') and isinstance(value, collections.Mapping):
@@ -390,11 +395,12 @@ def getSensorDeviceStates(sensorName, sensorData):
                         getSensorDeviceState(states,sensor,'Range',value,None)
                     elif(sensor.startswith('A')): #Analog A1,A2 ...
                         getSensorDeviceState(states,sensor,'Range',value)
-                    elif(sensor.startswith('Temperature'))                    
+                    elif(sensor.startswith('Temperature')): 
                         getSensorDeviceState(states,sensor,'Temperature',value,None)
-                    elif(sensor.startswith('Light'))                    
+                    elif(sensor.startswith('Light')):
                         getSensorDeviceState(states,sensor,'Illuminance',value,None)
     else: #all others sensors
+        Debug('tasmota::getSensorDeviceStates:OTHER: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
         if isinstance(sensorData, collections.Mapping):
             getSensorDeviceStateEx(states,sensorName,sensorData)
     return states
@@ -656,7 +662,6 @@ def updateSensorDevices(fullName, cmnd, message):
         for sensorName, sensorData in message.items():
             Debug('tasmota::updateSensorDevices: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
             if sensorName == 'ZbReceived':
-                Debug('tasmota::updateSensorDevices: ZbReceived!!!')
                 z2t = True
 
             deviceHash = getDeviceHash(fullName,z2t)
