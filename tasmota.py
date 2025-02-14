@@ -269,7 +269,7 @@ def getStateDevices(message):
 
 # https://www.b4x.com/android/forum/threads/rrfxmeter.139786/
  
-def getSensorDeviceState(states, sensName, attr, value, linkQuality):
+def getSensorDeviceState(states, sensName, attr, value, linkQuality, batteryPercentage):
     typeDb = {
     'Temperature':   {'Name': 'Temperature',   'Unit': '°C',   'DomoType': 'Temperature'},
     'Humidity':      {'Name': 'Humidity',      'Unit': '%',    'DomoType': 'Humidity'},
@@ -304,7 +304,7 @@ def getSensorDeviceState(states, sensName, attr, value, linkQuality):
         desc['LinkQuality'] = linkQuality
 #        if sens == 'ENERGY':
 #            desc['Sensor'] = 'Energy'
-        desc['LinkQuality'] = None
+        desc['BatteryPercentage'] = batteryPercentage
         states.append((sensName, attr, value, desc))
 
 #combine Sensor Attributes before
@@ -315,6 +315,7 @@ def getComposeAttr(attrList):
     composeAttr = None
     composeValue = None
     sensorName = None
+    batteryPercentage = None
     for Attr, Value in attrList.items():
         if Attr == 'Name':
             sensorName = Value
@@ -329,26 +330,31 @@ def getComposeAttr(attrList):
             Press = Value
         if Attr == 'LinkQuality':
             linkQuality = round(float(int(Value) / 20))
+        if Attr == 'BatteryPercentage': #0-100
+            batteryPercentage = Value
+#        if Attr == 'BatteryVoltage':
+#            batteryVoltage = Value
 
     if isTemp and isHum:
         composeAttr = 'Temp+Hum'
         composeValue = "{};{};1".format(Temp,int(round(float(Hum)))) # Domoticz humidity only accepted as integer 
-    return sensorName,composeAttr,composeValue,linkQuality
+    return sensorName,composeAttr,composeValue,linkQuality,batteryPercentage
 
 def getSensorDeviceStateEx(states, sensorName, attrList):
-    dummyName,Attr,Value,linkQuality = getComposeAttr(attrList)
+    dummyName,Attr,Value,linkQuality,batteryPercentage = getComposeAttr(attrList)
     Debug('tasmota::getSensorDeviceStatesEx: sensorName: {}, Attr: {}, Value: {}'.format(sensorName, Attr, Value))
     if Attr == None: # not compose attribute
         for Attr, Value in attrList.items():
-            getSensorDeviceState(states, sensorName, Attr, Value, linkQuality)
+            getSensorDeviceState(states, sensorName, Attr, Value, linkQuality, batteryPercentage)
     else:
-        getSensorDeviceState(states, sensorName, Attr, Value, linkQuality)
+        getSensorDeviceState(states, sensorName, Attr, Value, linkQuality, batteryPercentage)
 
-def getZigbeeDeviceState(states, sensName, attr, value, linkQuality):
+def getZigbeeDeviceState(states, sensName, attr, value, linkQuality, batteryPercentage):
     typeDb = {
     'Temperature':        {'Name': 'Temperature',   'Unit': '°C',   'DomoType': 'Temperature'},
     'Humidity':           {'Name': 'Humidity',      'Unit': '%',    'DomoType': 'Humidity'},
     'Temp+Hum':           {'Name': 'Temp+Hum',      'Unit': '',     'DomoType': 'Temp+Hum'}, # combine Temp+Hum device if Temperature and Humidity exist in attr list
+    'Water':              {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    # Water sensor
     'ZoneStatusChange':   {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    # Water sensor
     'ZoneStatus':         {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    # Motion sensor
     'Contact':            {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    # Door sensor
@@ -359,17 +365,18 @@ def getZigbeeDeviceState(states, sensName, attr, value, linkQuality):
         desc = typeDb[attr].copy()
         desc['Sensor'] = sensName
         desc['LinkQuality'] = linkQuality
+        desc['BatteryPercentage'] = batteryPercentage
         states.append((sensName, attr, value, desc))
 
 
 def getZigbeeDeviceStateEx(states, attrList):
-    sensorName,Attr,Value,linkQuality = getComposeAttr(attrList)
+    sensorName,Attr,Value,linkQuality,batteryPercentage = getComposeAttr(attrList)
     Debug('tasmota::getZigbeeDeviceStateEx: sensorName: {}, Attr: {}, Value: {}'.format(sensorName, Attr, Value))
     if Attr == None:
         for Attr, Value in attrList.items():
-            getZigbeeDeviceState(states, sensorName, Attr, Value, linkQuality)
+            getZigbeeDeviceState(states, sensorName, Attr, Value, linkQuality, batteryPercentage)
     else:
-        getZigbeeDeviceState(states, sensorName, Attr, Value, linkQuality)
+        getZigbeeDeviceState(states, sensorName, Attr, Value, linkQuality, batteryPercentage)
 
 # Возвращает массив значеий сенсоров устройсва.
 def getSensorDeviceStates(sensorName, sensorData):
@@ -392,13 +399,13 @@ def getSensorDeviceStates(sensorName, sensorData):
                 else: 
                     if sensor.startswith('Range'): # Range1,Range2 ...
                         value = float(value)/100
-                        getSensorDeviceState(states,sensor,'Range',value,None)
+                        getSensorDeviceState(states,sensor,'Range',value,None,None)
                     elif(sensor.startswith('A')): #Analog A1,A2 ...
-                        getSensorDeviceState(states,sensor,'Range',value)
+                        getSensorDeviceState(states,sensor,'Range',value,None,None)
                     elif(sensor.startswith('Temperature')): 
-                        getSensorDeviceState(states,sensor,'Temperature',value,None)
+                        getSensorDeviceState(states,sensor,'Temperature',value,None,None)
                     elif(sensor.startswith('Light')):
-                        getSensorDeviceState(states,sensor,'Illuminance',value,None)
+                        getSensorDeviceState(states,sensor,'Illuminance',value,None,None)
     else: #all others sensors
         Debug('tasmota::getSensorDeviceStates:OTHER: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
         if isinstance(sensorData, collections.Mapping):
@@ -595,13 +602,15 @@ def t2d(idx, attr, value):
     return 0, str(value)
 
 # Update a tasmota attributes value in its associated domoticz device idx
-def updateValue(idx, attr, value, signalLevel):
+def updateValue(idx, attr, value, signalLevel, batteryPercentage):
     nValue, sValue = t2d(idx, attr, value)
     if nValue != None and sValue != None:
         if Devices[idx].nValue != nValue or Devices[idx].sValue != sValue:
-            Debug("tasmota::updateValue: Idx:{}, Attr: {}, nValue: {}, sValue: {}, signalLevel: {}".format(
-                idx, attr, nValue, sValue, signalLevel))
-            if signalLevel != None:
+            Debug("tasmota::updateValue: Idx:{}, Attr: {}, nValue: {}, sValue: {}, signalLevel: {}, BatteryPercentage".format(
+                idx, attr, nValue, sValue, signalLevel, batteryPercentage))
+            if signalLevel != None and batteryPercentage != None:
+                Devices[idx].Update(nValue=nValue, sValue=sValue, SignalLevel=signalLevel, BatteryLevel=batteryPercentage)
+            elif signalLevel != None:
                 Devices[idx].Update(nValue=nValue, sValue=sValue, SignalLevel=signalLevel)
             else:
                 Devices[idx].Update(nValue=nValue, sValue=sValue)
@@ -621,7 +630,7 @@ def updateStateDevices(fullName, cmndName, message):
             if idx != None:
                 ret = True
         if idx != None:
-            updateValue(idx, attr, value, None)
+            updateValue(idx, attr, value, None, None)
     return ret
 
 
@@ -634,7 +643,7 @@ def updateResultDevice(fullName, message):
         try:
             description = json.loads(Devices[idx].Description)
             if description['Command'] == attr:
-                updateValue(idx, attr, value, None)
+                updateValue(idx, attr, value, None, None)
         except Exception as e:
             Domoticz.Error("tasmota::updateResultDevice: Update value for idx {} failed: {}".format(idx, str(e)))
 
@@ -680,18 +689,18 @@ def updateSensorDevices(fullName, cmnd, message):
                         for sensor, attr1, value1, desc in getSensorDeviceStates(sensorName,sensorData):
                             if desc['Name'] == 'Power':
                                 value.append(value1)
-                                updateValue(idx, attr, value, desc['LinkQuality'])
+                                updateValue(idx, attr, value, desc['LinkQuality'],desc['BatteryPercentage'])
                                 break
                     else:
-                        updateValue(idx, attr, value, desc['LinkQuality'])
+                        updateValue(idx, attr, value, desc['LinkQuality'],desc['BatteryPercentage'])
 
                     if 'LinkQuality' in desc:
                         Debug('tasmota::updateSensorDevices: LinkQuality: {}'.format(desc['LinkQuality']))
 #                        Devices[idx].Update(SignalLevel=desc['LinkQuality'])
 
-                    if 'BatteryLevel' in desc:
-                        Debug('tasmota::updateSensorDevices: BatteryLevel: {}'.format(desc['BatteryLevel']))
-#                        Devices[idx].Update(BatteryLevel=desc['BatteryLevel'])
+                    if 'BatteryPercentage' in desc:
+                        Debug('tasmota::updateSensorDevices: BatteryPercentage: {}'.format(desc['desc['BatteryPercentage']']))
+#                        Devices[idx].Update(BatteryLevel=desc['BatteryPercentage'])
     return ret
 
 
