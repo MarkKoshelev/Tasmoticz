@@ -330,6 +330,8 @@ def getComposeAttr(attrList):
             Press = Value
         if Attr == 'LinkQuality':
             linkQuality = round(float(int(Value) / 20))
+        if Attr == 'RSSI': #0-100
+            linkQuality = Value / 10
         if Attr == 'BatteryPercentage': #0-100
             batteryPercentage = Value
 #        if Attr == 'BatteryVoltage':
@@ -605,15 +607,15 @@ def t2d(idx, attr, value):
 def updateValue(idx, attr, value, signalLevel, batteryPercentage):
     nValue, sValue = t2d(idx, attr, value)
     if nValue != None and sValue != None:
-        if Devices[idx].nValue != nValue or Devices[idx].sValue != sValue:
-            Debug("tasmota::updateValue: Idx:{}, Attr: {}, nValue: {}, sValue: {}, signalLevel: {}, BatteryPercentage".format(
-                idx, attr, nValue, sValue, signalLevel, batteryPercentage))
-            if signalLevel != None and batteryPercentage != None:
-                Devices[idx].Update(nValue=nValue, sValue=sValue, SignalLevel=signalLevel, BatteryLevel=batteryPercentage)
-            elif signalLevel != None:
-                Devices[idx].Update(nValue=nValue, sValue=sValue, SignalLevel=signalLevel)
-            else:
-                Devices[idx].Update(nValue=nValue, sValue=sValue)
+#        if Devices[idx].nValue != nValue or Devices[idx].sValue != sValue:
+        Debug("tasmota::updateValue: Idx:{}, Attr: {}, nValue: {}, sValue: {}, SignalLevel: {}, BatteryPercentage {}".format(
+            idx, attr, nValue, sValue, signalLevel, batteryPercentage))
+        if signalLevel != None and batteryPercentage != None:
+            Devices[idx].Update(nValue=nValue, sValue=sValue, SignalLevel=signalLevel, BatteryLevel=batteryPercentage)
+        elif signalLevel != None:
+            Devices[idx].Update(nValue=nValue, sValue=sValue, SignalLevel=signalLevel)
+        else:
+            Devices[idx].Update(nValue=nValue, sValue=sValue)
 
 #Devices[idx].Update(nValue=nValue, sValue=sValue, SignalLevel=10, BatteryLevel=100) # SignalLevel=0-10 BatteryLevel=0-100
 
@@ -694,12 +696,12 @@ def updateSensorDevices(fullName, cmnd, message):
                     else:
                         updateValue(idx, attr, value, desc['LinkQuality'],desc['BatteryPercentage'])
 
-                    if 'LinkQuality' in desc:
-                        Debug('tasmota::updateSensorDevices: LinkQuality: {}'.format(desc['LinkQuality']))
+#                    if 'LinkQuality' in desc:
+#                        Debug('tasmota::updateSensorDevices: LinkQuality: {}'.format(desc['LinkQuality']))
 #                        Devices[idx].Update(SignalLevel=desc['LinkQuality'])
 
-                    if 'BatteryPercentage' in desc:
-                        Debug('tasmota::updateSensorDevices: BatteryPercentage: {}'.format(desc['desc['BatteryPercentage']']))
+#                    if 'BatteryPercentage' in desc:
+#                        Debug('tasmota::updateSensorDevices: BatteryPercentage: {}'.format(desc['BatteryPercentage']))
 #                        Devices[idx].Update(BatteryLevel=desc['BatteryPercentage'])
     return ret
 
