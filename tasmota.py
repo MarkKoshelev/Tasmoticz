@@ -227,22 +227,24 @@ def findDevicesByHash(deviceHash):
 # Collects a list of all supported attribute key/value pairs from tasmota tele STATE messages
 def getStateDevices(message):
     states = []
-    for attr in ['POWER', 'Heap', 'LoadAvg'] + ['POWER{}'.format(r) for r in range(1, 33)]:
-        try:
-            value = message[attr]
-            states.append((attr, value))
-        except:
-            pass
+    signalLevel = None
 
     wifiattrs = ['RSSI']
     for attr in wifiattrs:
         try:
-            value = message['Wifi'][attr]
-            states.append((attr, value))
+            signalLevel = round(float(int(message['Wifi'][attr]) / 10))
         except:
             pass
-    return states
 
+#    for attr in ['POWER', 'Heap', 'LoadAvg'] + ['POWER{}'.format(r) for r in range(1, 33)]:
+    for attr in ['POWER'] + ['POWER{}'.format(r) for r in range(1, 33)]:
+        try:
+            value = message[attr]
+            states.append((attr, value, signalLevel))
+        except:
+            pass
+
+    return states
 
 # Collects a list of all supported attribute sensor/type/value tuples from tasmota tele SENSOR messages
 # * One sensor can contain several types (e.g. DHT11 has Temperature and Humidity)
@@ -340,6 +342,7 @@ def getComposeAttr(attrList):
     if isTemp and isHum:
         composeAttr = 'Temp+Hum'
         composeValue = "{};{};1".format(Temp,int(round(float(Hum)))) # Domoticz humidity only accepted as integer 
+
     return sensorName,composeAttr,composeValue,linkQuality,batteryPercentage
 
 def getSensorDeviceStateEx(states, sensorName, attrList):
@@ -484,7 +487,7 @@ def createStateDevice(fullName, cmnd, deviceAttr):
 def createSensorDevice(fullName, deviceHash, cmnd, deviceAttr, desc):
 
 #    Create domoticz sensor device for device with fullName
-#    DeviceID is hash of fullName, Zigbee DeviceID is Z2T-<hash of fullName>
+#    DeviceID is hash of fullName, Zigbee DeviceID is <hash of fullName>-Z2T
 #    Description contains necessary info as json to send  DomoticzCommand
 
     for idx in range(1, 512):
@@ -624,15 +627,16 @@ def updateValue(idx, attr, value, signalLevel, batteryPercentage):
 def updateStateDevices(fullName, cmndName, message):
     ret = False
     idxs = findDevices(fullName)
-    Debug('tasmota::updateStateDevices: message {}'.format(repr(message)))
-    for attr, value in getStateDevices(message):
+    Debug('tasmota::updateStateDevices: fullName: {}, cmdName: {}, message {}'.format(fullName, cmndName, repr(message)))
+    for attr, value, signalLevel in getStateDevices(message):
         idx = deviceByAttr(idxs, attr)
+        Debug('tasmota::updateStateDevices: idx: {}, attr: {}, value: {}, signalLevel {}'.format(idx, attr, value, signalLevel))
         if idx == None:
             idx = createStateDevice(fullName, cmndName, attr)
             if idx != None:
                 ret = True
         if idx != None:
-            updateValue(idx, attr, value, None, None)
+            updateValue(idx, attr, value, signalLevel, None)
     return ret
 
 
@@ -663,6 +667,22 @@ def deviceByNameType(idxs, deviceName, attrName):
             pass
     return None
 
+def createTextDevice(deviceName, deviceHash):
+    for idx in range(1, 512):
+        if idx not in Devices:
+            break
+    Domoticz.Device(Name=deviceName, Unit=idx, TypeName='Text', Used=1, DeviceID=deviceHash).Create()
+    if idx in Devices:
+        # Remove hardware/plugin name from domoticz device name
+        Devices[idx].Update(
+            nValue=Devices[idx].nValue, sValue=Devices[idx].sValue, Name=deviceName)
+        Domoticz.Log("tasmota::createTextDevice: ID: {}, Name: {}, Hash: {}".format(
+            idx, deviceName, deviceHash))
+        return idx
+
+    Domoticz.Error("tasmota:createTextDevice: Failed creating Device ID: {}, deviceName: {}, deviceHash: {}".format(
+        idx, deviceName, deviceHash))
+    return None
 
 # Update domoticz device values related to tasmota SENSOR message, create device if it does not exist yet
 # Returns true if a new device was created
@@ -672,11 +692,21 @@ def updateSensorDevices(fullName, cmnd, message):
     if isinstance(message, collections.Mapping):
         for sensorName, sensorData in message.items():
             Debug('tasmota::updateSensorDevices: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
-            if sensorName == 'ZbReceived':
+            if sensorName in  ['ZbReceived'] + ['ZbRestore']:
                 z2t = True
 
             deviceHash = getDeviceHash(fullName,z2t)
             idxs = findDevicesByHash(deviceHash)
+            if z2t:
+                myIdx = None
+                for idx in idxs:
+                   if Devices[idx].Name == fullName:
+                       myIdx = idx
+                       break;
+                if myIdx == None:
+                       idx = createTextDevice(fullName, deviceHash)
+                if idx != None:
+                    Devices[idx].Update(nValue=0, sValue=repr(sensorData))
 
             for sensor, attr, value, desc in getSensorDeviceStates(sensorName,sensorData):
                 Debug('tasmota::updateSensorDevices: sensor {}, type {}, value {}, desc {}'.format(sensor, attr, value, desc))
