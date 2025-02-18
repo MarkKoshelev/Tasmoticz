@@ -205,24 +205,14 @@ def findDevices(fullName):
     for device in Devices:
         if Devices[device].DeviceID == deviceHash:
             idxs.append(device)
-
- #   Debug('tasmota::findDevices: fullName: {}, Idxs {}'.format(fullName, repr(idxs)))
     return idxs
 
-def getDeviceHash(fullName,z2t):
-    deviceHash = deviceId(fullName)
-    if z2t:
-        deviceHash = '{}-Z2T'.format(deviceHash) 
-    return deviceHash  
-
-def findDevicesByHash(deviceHash):
+def findDevicesByID(deviceID):
     idxs = []
     for device in Devices:
-        if Devices[device].DeviceID == deviceHash:
+        if Devices[device].DeviceID == deviceID:
             idxs.append(device)
- #   Debug('tasmota::findZigbeeDevices: fullName: {}, Idxs {}'.format(fullName, repr(idxs)))
     return idxs
-
 
 # Collects a list of all supported attribute key/value pairs from tasmota tele STATE messages
 def getStateDevices(message):
@@ -375,12 +365,12 @@ def getZigbeeDeviceStateEx(states, attrList):
 
     if 'LinkQuality' in attrList:
         linkQuality = round(float(int(attrList['LinkQuality']) / 25))
-    else 
+    else:
         linkQuality = None
         
     if 'BatteryPercentage' in attrList:
         batteryPercentage = Value
-    else 
+    else:
         batteryPercentage = None
 
     Attr,Value = getComposeAttr(attrList)
@@ -698,37 +688,35 @@ def createTextDevice(deviceName, deviceHash):
 # Returns true if a new device was created
 def updateSensorDevices(mqttName, cmnd, message):
     ret = False
-    z2t = False
+    deviceID = deviceId(mqttName)
     if isinstance(message, collections.Mapping):
         for sensorName, sensorData in message.items():
             Debug('tasmota::updateSensorDevices: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
             if sensorName in  ['ZbReceived'] + ['ZbRestore']:
-                z2t = True
-
-            deviceHash = getDeviceHash(mqttName,z2t)
-            idxs = findDevicesByHash(deviceHash)
-            if z2t:
+                deviceID = '{}-{}'.format(deviceID,'0x0000')
+                idxs = findDevicesByID(deviceID)
                 myIdx = None
                 for idx in idxs:
                    if Devices[idx].Name == mqttName:
                        myIdx = idx
                        break;
                 if myIdx == None:
-                       idx = createTextDevice(mqttName, deviceHash)
+                       idx = createTextDevice(mqttName, deviceID)
                 if idx != None:
                     Devices[idx].Update(nValue=0, sValue=repr(sensorData))
 
             for sensor, attr, value, desc in getSensorDeviceStates(sensorName,sensorData):
-                if sensor.startWith('0x'): #zigbee device
-                    deviceHash = '{}-{}'.format(deviceHash,sensor)
-                    idxs = findDevicesByHash(deviceHash)
+                if sensor.startswith('0x'): #zigbee device
+                    deviceID = '{}-{}'.format(deviceHash,sensor)
+                    idxs = findDevicesByID(deviceID)
+                else:
+                    deviceID = deviceHash
 
-                     
-                Debug('tasmota::updateSensorDevices: sensor {}, attr {}, value {}, desc {}'.format(sensor, attr, value, desc))
+                Debug('tasmota::updateSensorDevices: deviceID: {}, sensor: {}, attr: {}, value: {}, desc: {}'.format(deviceID, sensor, attr, value, desc))
                 command = '{}-{}'.format(sensor, attr) #command: <Device>-<attribute>: (example: 0x1234-Power, 0x1234-'BatteryVoltage') 
                 idx = deviceByNameType(idxs, sensor, desc['Name']) # desc['Name']: domoticz device type: (example: 'Temp+Hum')
                 if idx == None:
-                    idx = createSensorDevice(mqttName, deviceHash, cmnd, command, desc)
+                    idx = createSensorDevice(mqttName, deviceID, cmnd, command, desc)
                     if idx != None:
                         ret = True
                 if idx != None:
@@ -741,13 +729,6 @@ def updateSensorDevices(mqttName, cmnd, message):
                     else:
                         updateValue(idx, attr, value, desc['LinkQuality'],desc['BatteryPercentage'])
 
-#                    if 'LinkQuality' in desc:
-#                        Debug('tasmota::updateSensorDevices: LinkQuality: {}'.format(desc['LinkQuality']))
-#                        Devices[idx].Update(SignalLevel=desc['LinkQuality'])
-
-#                    if 'BatteryPercentage' in desc:
-#                        Debug('tasmota::updateSensorDevices: BatteryPercentage: {}'.format(desc['BatteryPercentage']))
-#                        Devices[idx].Update(BatteryLevel=desc['BatteryPercentage'])
     return ret
 
 
