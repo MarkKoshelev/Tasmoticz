@@ -335,6 +335,7 @@ def getSensorDeviceStateEx(states, sensorName, attrList):
         getSensorDeviceState(states, sensorName, Attr, Value, None, None)
 
 #zbDevice: value of Device attribute, zbName: value of Name attribute: sensor friendly name with zbname
+ 
 def getZigbeeDeviceState(states, zbDevice, zbName, attr, value, linkQuality, batteryPercentage):
     typeDb = {
     'Temperature':        {'Name': 'Temperature',   'Unit': '°C',   'DomoType': 'Temperature'},
@@ -349,10 +350,10 @@ def getZigbeeDeviceState(states, zbDevice, zbName, attr, value, linkQuality, bat
 
     if attr in typeDb and value is not None:
         desc = typeDb[attr].copy()
-        desc['Sensor'] = zbDevice
+        desc['Sensor'] = zbName
         desc['LinkQuality'] = linkQuality
         desc['BatteryPercentage'] = batteryPercentage
-        states.append((zbName, attr, value, desc))
+        states.append((zbDevice, attr, value, desc))
 
 
 def getZigbeeDeviceStateEx(states, attrList):
@@ -369,7 +370,7 @@ def getZigbeeDeviceStateEx(states, attrList):
         linkQuality = None
         
     if 'BatteryPercentage' in attrList:
-        batteryPercentage = Value
+        batteryPercentage = attrList['BatteryPercentage']
     else:
         batteryPercentage = None
 
@@ -379,7 +380,7 @@ def getZigbeeDeviceStateEx(states, attrList):
   
     if Attr == None:
         for Attr, Value in attrList.items():
-            getZigbeeDeviceState(states, zbName, Attr, Value, linkQuality, batteryPercentage)
+            getZigbeeDeviceState(states, zbDevice, zbName, Attr, Value, linkQuality, batteryPercentage)
     else:
         getZigbeeDeviceState(states, zbDevice, zbName, Attr, Value, linkQuality, batteryPercentage)
 
@@ -484,10 +485,10 @@ def createStateDevice(fullName, cmnd, deviceAttr):
 
 
 # Create a domoticz device from infos extracted out of tasmota SENSOR tele messages
-def createSensorDevice(fullName, deviceHash, cmnd, deviceAttr, desc):
+def createSensorDevice(mqttName, deviceID, mqttTopic, device, deviceAttr, desc):
 
-#    Create domoticz sensor device for device with fullName
-#    DeviceID is hash of fullName, Zigbee DeviceID is <hash of fullName>-Z2T
+#    Create domoticz sensor device for device with mqttName
+#    DeviceID is hash of mqttName, Zigbee DeviceID is <hash of mqttName>-<zigbee device> : 11111111-0xcccc
 #    Description contains necessary info as json to send  DomoticzCommand
 
     for idx in range(1, 512):
@@ -497,46 +498,46 @@ def createSensorDevice(fullName, deviceHash, cmnd, deviceAttr, desc):
     attrs = deviceAttr.split('-')
 
     if len(attrs) > 2:
-        deviceName = '{} {} {} {}'.format(fullName, desc['Sensor'], attrs[-2], desc['Name'])
+        domoDeviceName = '{} {} {} {}'.format(mqttName, desc['Sensor'], attrs[-2], desc['Name'])
     else:
-        deviceName = '{} {} {}'.format(fullName, desc['Sensor'], desc['Name'])
+        domoDeviceName = '{} {} {}'.format(mqttName, desc['Sensor'], desc['Name'])
 
-    if len(attrs) > 1: #zigbee device type
+    if device.startswith('0x'): #zigbee device type TODO
         attr = attrs[-1]
         if attr.upper() == 'POWER':
-            cmnd = "{}/{}".format(cmnd,'ZbSend')
+            mqttTopic = "{}/{}".format(mqttTopic,'ZbSend')
 
-    description = {'Topic': cmnd, 'Command': deviceAttr,
-                   'Device': desc['Sensor'], 'Type': desc['Name']}
+    description = {'Topic': mqttTopic, 'Command': deviceAttr,
+                   'Device': device, 'Type': desc['Name']}
 
     if desc['DomoType'][0] == 'Custom':
         options = {'Custom': '1;{}'.format(desc['Unit'])}
     else:
         options = None
 
-    Domoticz.Log("tasmota::createSensorDevice: deviceName: {}, fullName: {}, deviceHash: {}".format(
-        deviceName, fullName, deviceHash))
+    Domoticz.Log("tasmota::createSensorDevice: deviceID: {}, domoDeviceName: {}, mqttName: {}".format(
+        deviceID, domoDeviceName, mqttName))
 
     if not desc['DomoType'][:1].isdigit():
         # Create device by string TypeName
-        Domoticz.Device(Name=deviceName, Unit=idx, TypeName=desc['DomoType'], Used=1, Options=options,
-            Description=json.dumps(description, indent=2, ensure_ascii=False), DeviceID=deviceHash).Create()
+        Domoticz.Device(Name=domoDeviceName, Unit=idx, TypeName=desc['DomoType'], Used=1, Options=options,
+            Description=json.dumps(description, indent=2, ensure_ascii=False), DeviceID=deviceID).Create()
     else:
         # Create device without TypeName using domoticz low level Type, Subtype and Switchtype
         dtype, dsub, dswitch = desc['DomoType'].split(";")
-        Domoticz.Device(Name=deviceName, Unit=idx, Type=int(dtype), Subtype=int(dsub), Switchtype=int(dswitch), Used=1, Options=options,
-            Description=json.dumps(description, indent=2, ensure_ascii=False), DeviceID=deviceHash).Create()
+        Domoticz.Device(Name=domoDeviceName, Unit=idx, Type=int(dtype), Subtype=int(dsub), Switchtype=int(dswitch), Used=1, Options=options,
+            Description=json.dumps(description, indent=2, ensure_ascii=False), DeviceID=deviceID).Create()
 
     if idx in Devices:
-        # Remove hardware/plugin name from domoticz device name
+#        # Remove hardware/plugin name from domoticz device name
         Devices[idx].Update(
-            nValue=Devices[idx].nValue, sValue=Devices[idx].sValue, Name=deviceName, SuppressTriggers=True)
-        Domoticz.Log("tasmota::createSensorDevice: ID: {}, Name: {}, On: {}, Hash: {}, Type: {}".format(
-            idx, deviceName, fullName, deviceHash, desc['DomoType']))
+            nValue=Devices[idx].nValue, sValue=Devices[idx].sValue, Name=domoDeviceName, SuppressTriggers=True)
+        Domoticz.Log("tasmota::createSensorDevice: mqttName: {}, deviceID: {}, domoDeviceName: {}, domoType: {}".format(
+            mqttName, deviceID, domoDeviceName, desc['DomoType']))
         return idx
 
-    Domoticz.Error("tasmota::createSensorDevice: Failed creating Device ID: {}, deviceName: {}, fullName: {}, deviceHash: {}, Type: {}".format(
-        idx, deviceName, fullName, deviceHash, desc['DomoType']))
+    Domoticz.Error("tasmota::createSensorDevice: Failed: mqttName: {}, deviceID: {}, domoDeviceName: {}, topicdomoType: {}".format(
+        mqttName, DeviceID, domoDeviceName, desc['DomoType']))
     return None
 
 # Translate device value received form domoticz to tasmota attribute/value
@@ -654,7 +655,8 @@ def updateResultDevice(fullName, message):
             Domoticz.Error("tasmota::updateResultDevice: Update value for idx {} failed: {}".format(idx, str(e)))
 
 
-def deviceByNameType(idxs, device, attrName):
+def deviceByNameType(idxs, device, attr):
+#    Debug('tasmota::deviceByNameType: device: {}, attr: {}, idxs {}'.format(device, attr, idxs))
     for idx in idxs:
         try:
             description = json.loads(Devices[idx].Description)
@@ -692,31 +694,31 @@ def updateSensorDevices(mqttName, cmnd, message):
     if isinstance(message, collections.Mapping):
         for sensorName, sensorData in message.items():
             Debug('tasmota::updateSensorDevices: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
-            if sensorName in  ['ZbReceived'] + ['ZbRestore']:
-                deviceID = '{}-{}'.format(deviceID,'0x0000')
-                idxs = findDevicesByID(deviceID)
+            if sensorName in ['ZbReceived'] + ['ZbRestore']:
+                deviceIDMsg = '{}-{}'.format(deviceID,'0x0000')
+                idxs = findDevicesByID(deviceIDMsg)
                 myIdx = None
                 for idx in idxs:
                    if Devices[idx].Name == mqttName:
                        myIdx = idx
                        break;
                 if myIdx == None:
-                       idx = createTextDevice(mqttName, deviceID)
+                       idx = createTextDevice(mqttName, deviceIDMsg)
                 if idx != None:
                     Devices[idx].Update(nValue=0, sValue=repr(sensorData))
 
             for sensor, attr, value, desc in getSensorDeviceStates(sensorName,sensorData):
                 if sensor.startswith('0x'): #zigbee device
-                    deviceID = '{}-{}'.format(deviceHash,sensor)
+                    deviceID = '{}-{}'.format(deviceID,sensor)
                     idxs = findDevicesByID(deviceID)
                 else:
-                    deviceID = deviceHash
+                    idxs = findDevicesByID(deviceID)
 
                 Debug('tasmota::updateSensorDevices: deviceID: {}, sensor: {}, attr: {}, value: {}, desc: {}'.format(deviceID, sensor, attr, value, desc))
                 command = '{}-{}'.format(sensor, attr) #command: <Device>-<attribute>: (example: 0x1234-Power, 0x1234-'BatteryVoltage') 
                 idx = deviceByNameType(idxs, sensor, desc['Name']) # desc['Name']: domoticz device type: (example: 'Temp+Hum')
                 if idx == None:
-                    idx = createSensorDevice(mqttName, deviceID, cmnd, command, desc)
+                    idx = createSensorDevice(mqttName, deviceID, cmnd, sensor, command, desc)
                     if idx != None:
                         ret = True
                 if idx != None:
