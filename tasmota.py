@@ -345,7 +345,10 @@ def getZigbeeDeviceState(states, zbDevice, zbName, attr, value, linkQuality, bat
     'ZoneStatusChange':   {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    # Water sensor
     'ZoneStatus':         {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    # Motion sensor
     'Contact':            {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    # Door sensor
-    'Power':              {'Name': 'Switch',        'Unit': '',     'DomoType': 'Switch'}    # Switch
+    'Power':              {'Name': 'Switch',        'Unit': '',     'DomoType': 'Switch'},   # Switch
+    'ActivePower':        {'Name': 'Power',         'Unit': 'kW',   'DomoType': 'Usage'},
+    'RMSVoltage':         {'Name': 'Voltage',       'Unit': 'V',    'DomoType': 'Voltage'},
+    'BatteryVoltage':     {'Name': 'Voltage',       'Unit': 'V',    'DomoType': 'Voltage'}
     }
 
     if attr in typeDb and value is not None:
@@ -368,16 +371,21 @@ def getZigbeeDeviceStateEx(states, attrList):
         linkQuality = round(float(int(attrList['LinkQuality']) / 25))
     else:
         linkQuality = None
-        
+
     if 'BatteryPercentage' in attrList:
         batteryPercentage = attrList['BatteryPercentage']
     else:
         batteryPercentage = None
 
+    if 'BatteryVoltage' in attrList:
+        batteryVoltage = attrList['BatteryVoltage']
+        if batteryVoltage > 1: #exclude wrong value
+            getZigbeeDeviceState(states, zbDevice, zbName, 'BatteryVoltage', batteryVoltage, linkQuality, batteryPercentage)
+
     Attr,Value = getComposeAttr(attrList)
-        
+
     Debug('tasmota::getZigbeeDeviceStateEx: zbDevice: {}, zbName: {}, Attr: {}, Value: {}'.format(zbDevice, zbName, Attr, Value))
-  
+
     if Attr == None:
         for Attr, Value in attrList.items():
             getZigbeeDeviceState(states, zbDevice, zbName, Attr, Value, linkQuality, batteryPercentage)
@@ -387,7 +395,7 @@ def getZigbeeDeviceStateEx(states, attrList):
 # Возвращает массив значеий сенсоров устройсва.
 def getSensorDeviceStates(sensorName, sensorData):
     states = []
-    if sensorName == 'ZbReceived': #zigbee2tasmota sensor
+    if sensorName in ['ZbReceived'] + ['ZbInfo']: #zigbee2tasmota sensor
         Debug('tasmota::getSensorDeviceStates:ZbReceived: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
         if isinstance(sensorData, collections.Mapping):
             for deviceName, AttrList in sensorData.items(): # deviceName skipped, used from sensorData
@@ -694,7 +702,7 @@ def updateSensorDevices(mqttName, cmnd, message):
     if isinstance(message, collections.Mapping):
         for sensorName, sensorData in message.items():
             Debug('tasmota::updateSensorDevices: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
-            if sensorName in ['ZbReceived'] + ['ZbRestore']:
+            if sensorName in ['ZbReceived'] + ['ZbInfo']:
                 deviceIDMsg = '{}-{}'.format(deviceID,'0x0000')
                 idxs = findDevicesByID(deviceIDMsg)
                 myIdx = None
@@ -709,16 +717,17 @@ def updateSensorDevices(mqttName, cmnd, message):
 
             for sensor, attr, value, desc in getSensorDeviceStates(sensorName,sensorData):
                 if sensor.startswith('0x'): #zigbee device
-                    deviceID = '{}-{}'.format(deviceID,sensor)
-                    idxs = findDevicesByID(deviceID)
+                    deviceIDSens = '{}-{}'.format(deviceID,sensor)
+                    idxs = findDevicesByID(deviceIDSens)
                 else:
-                    idxs = findDevicesByID(deviceID)
+                    deviceIDSens = deviceID
+                    idxs = findDevicesByID(deviceIDSens)
 
-                Debug('tasmota::updateSensorDevices: deviceID: {}, sensor: {}, attr: {}, value: {}, desc: {}'.format(deviceID, sensor, attr, value, desc))
+                Debug('tasmota::updateSensorDevices: deviceID: {}, sensor: {}, attr: {}, value: {}, desc: {}'.format(deviceIDSens, sensor, attr, value, desc))
                 command = '{}-{}'.format(sensor, attr) #command: <Device>-<attribute>: (example: 0x1234-Power, 0x1234-'BatteryVoltage') 
                 idx = deviceByNameType(idxs, sensor, desc['Name']) # desc['Name']: domoticz device type: (example: 'Temp+Hum')
                 if idx == None:
-                    idx = createSensorDevice(mqttName, deviceID, cmnd, sensor, command, desc)
+                    idx = createSensorDevice(mqttName, deviceIDSens, cmnd, sensor, command, desc)
                     if idx != None:
                         ret = True
                 if idx != None:
