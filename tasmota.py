@@ -168,7 +168,7 @@ class Handler:
             if updateSensorDevices(fullName, cmnd, message):
                 self.requestStatus(cmnd)
         elif tail == 'RESULT':  # POWER* change
-            updateResultDevice(fullName, message)
+            updateResultDevice(fullName, cmnd, message)
         elif tail == 'STATUS':  # Friendly names
             updateStatusDevices(fullName, cmnd, message)
         elif tail == 'INFO1':  # update module and version in device description
@@ -411,8 +411,8 @@ def getSensorDeviceStates(sensorName, sensorData):
                 if sensor.startswith('CTEnergy') and isinstance(value, collections.Mapping):
 #                  sensor: "CTEnergy1, CTEnergy2..."
                     getSensorDeviceStateEx(states,sensor,value)
-                elif sensor == 'RfReceived':
-                    getSensorDeviceStateEx(states,sensor,value)
+#                elif sensor == 'RfReceived':
+#                    getSensorDeviceStateEx(states,sensor,value)
                 else: 
                     if sensor.startswith('Range'): # Range1,Range2 ...
                         value = float(value)/100
@@ -513,7 +513,7 @@ def createSensorDevice(mqttName, deviceID, mqttTopic, device, deviceAttr, desc):
     else:
         domoDeviceName = '{} {} {}'.format(mqttName, desc['Sensor'], desc['Name'])
 
-    if device.startswith('0x'): #zigbee device type TODO
+    if device.startswith('0x'): #hack: zigbee device type
         attr = attrs[-1]
         if attr.upper() == 'POWER':
             mqttTopic = "{}/{}".format(mqttTopic,'ZbSend')
@@ -653,7 +653,7 @@ def updateStateDevices(fullName, cmndName, message):
 
 
 # Update domoticz device related to tasmota RESULT message (e.g. on power on/off)
-def updateResultDevice(mqttName, message):
+def updateResultDevice(mqttName, cmnd, message):
 #    idxs = findDevices(mqttName)
 #    attr, value = next(iter(message.items()))
 #    Debug('tasmota::updateResultDevices: message {}'.format(repr(message)))
@@ -667,10 +667,12 @@ def updateResultDevice(mqttName, message):
 
     deviceID = deviceId(mqttName)
     if isinstance(message, collections.Mapping):
+        states = []
         for sensorName, sensorData in message.items():
             Debug('tasmota::updateResultDevice: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
- 
-            for sensor, attr, value, desc in getSensorDeviceStates(sensorName,sensorData):
+            if sensorName == 'RfReceived':
+                getSensorDeviceStateEx(states,sensorName,sensorData)
+            for sensor, attr, value, desc in states:
                 idxs = findDevicesByID(deviceID)
                 Debug('tasmota::updateResultDevice: deviceID: {}, sensor: {}, attr: {}, value: {}, desc: {}'.format(deviceID, sensor, attr, value, desc))
                 command = '{}-{}'.format(sensor, attr) #command: <Device>-<attribute>: (example: 0x1234-Power, 0x1234-'BatteryVoltage') 
@@ -681,7 +683,22 @@ def updateResultDevice(mqttName, message):
                         ret = True
                 if idx != None:
                     updateValue(idx, attr, value, desc['LinkQuality'],desc['BatteryPercentage'])
-    return ret
+
+
+    else: #POWER result of Switch 
+        idxs = findDevicesByID(deviceID)
+        attr, value = next(iter(message.items()))
+        Debug('tasmota::updateResultDevices: attr: {}, vlaue: {}, message: {}'.format(repr(message)))
+        for idx in idxs:
+            try:
+                description = json.loads(Devices[idx].Description)
+                if description['Command'] == attr:
+                    updateValue(idx, attr, value, None, None)
+            except Exception as e:
+                Domoticz.Error("tasmota::updateResultDevice: Update value for idx: {} failed: {}".format(idx, str(e)))
+
+
+#    return ret
 
 
 def deviceByNameType(idxs, device, attr):
