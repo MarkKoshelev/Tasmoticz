@@ -331,9 +331,9 @@ def getSensorDeviceStateEx(states, sensorName, attrList):
     Debug('tasmota::getSensorDeviceStatesEx: sensorName: {}, Attr: {}, Value: {}'.format(sensorName, Attr, Value))
     if Attr == None: # not compose attribute
         for Attr, Value in attrList.items():
-            getSensorDeviceState(states, sensorName, Attr, Value, None, -1)
+            getSensorDeviceState(states, sensorName, Attr, Value, None, 255)
     else:
-        getSensorDeviceState(states, sensorName, Attr, Value, None, -1)
+        getSensorDeviceState(states, sensorName, Attr, Value, None, 255)
 
 #zbDevice: value of Device attribute, zbName: value of Name attribute: sensor friendly name with zbname
  
@@ -630,11 +630,7 @@ def updateValue(idx, attr, value, signalLevel, batteryPercentage):
         elif signalLevel != None and batteryPercentage == None:
             Devices[idx].Update(nValue=nValue, sValue=sValue, SignalLevel=signalLevel)
         elif signalLevel == None and batteryPercentage != None:
-            if batteryPercentage == -1:
-            #TODO use batteryPercentage as -1 to set BatteryLevel=None
-                Devices[idx].Update(nValue=nValue, sValue=sValue, BatteryLevel=None)
-            else
-                Devices[idx].Update(nValue=nValue, sValue=sValue, BatteryLevel=batteryPercentage)
+            Devices[idx].Update(nValue=nValue, sValue=sValue, BatteryLevel=batteryPercentage)
         else:
             Devices[idx].Update(nValue=nValue, sValue=sValue)
 
