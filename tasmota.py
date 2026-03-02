@@ -283,8 +283,13 @@ def getSensorDeviceState(states, sensName, attr, value, linkQuality, batteryPerc
     'Frequency':     {'Name': 'Frequency',     'Unit': 'Hz',   'DomoType': 'Custom'},
     'Voltage':       {'Name': 'Voltage',       'Unit': 'V',    'DomoType': 'Voltage'},
     'Current':       {'Name': 'Current',       'Unit': 'A',    'DomoType': 'Current (Single)'},
-    'Data':          {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},    #hack: RfReceived result value
-    'Range':         {'Name': 'Pressure',      'Unit': 'Bar',  'DomoType': 'Pressure'}  #hack: Analog Range treat pressure
+    'Data':          {'Name': 'Alert',         'Unit': '',     'DomoType': 'Alert'},     #hack: RfReceived result value
+    'Range':         {'Name': 'Pressure',      'Unit': 'Bar',  'DomoType': 'Pressure'},  # hack: Analog Range treat pressure
+    'Weight':        {'Name': 'Pressure',      'Unit': 'Bar',  'DomoType': 'Pressure'},  # HX711":{"Weight":21,"WeightRaw":14752,"AbsRaw":1770262}}
+    'Position':      {'Name': 'Shutter',       'Unit': '',     'DomoType': 'Percentage'}
+#    Shutter1":{"Position":0,"Direction":0,"Target":0,"Tilt":0}
+#    "DS18B20-1":{"Id":"3C01B5562F0C","Temperature":25.6},"DS18B20-2":{"Id":"3C01B5560B1D","Temperature":24.8},"TempUnit":"C"}
+
 #    P1 Smart Meter: 250,1,0 (hardware type)
 #    P1 Smart Meter: 250,1,0 (hardware type)
 #    'TotalTariff':   {'Name': 'TotalTariff',  'Unit': '',     'DomoType': '250;1;0'} #need to add Power value to sValue = "T1;T2;0.0;0.0,P,0";
@@ -295,8 +300,6 @@ def getSensorDeviceState(states, sensName, attr, value, linkQuality, batteryPerc
         desc = typeDb[attr].copy()
         desc['Sensor'] = sensName
         desc['LinkQuality'] = linkQuality
-#        if sens == 'ENERGY':
-#            desc['Sensor'] = 'Energy'
         desc['BatteryPercentage'] = batteryPercentage
         states.append((sensName, attr, value, desc))
 
@@ -397,7 +400,7 @@ def getZigbeeDeviceStateEx(states, attrList):
 def getSensorDeviceStates(sensorName, sensorData):
     states = []
     if sensorName in ['ZbReceived'] + ['ZbInfo']: #zigbee2tasmota sensor
-        Debug('tasmota::getSensorDeviceStates:ZbReceived: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
+#        Debug('tasmota::getSensorDeviceStates:ZbReceived: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
         if isinstance(sensorData, collections.Mapping):
             for deviceName, AttrList in sensorData.items(): # deviceName skipped, used from sensorData
                 if isinstance(AttrList, collections.Mapping):
@@ -405,7 +408,7 @@ def getSensorDeviceStates(sensorName, sensorData):
         else: # no device name in message (SetOption83 1 ???) sensorData is attribute list
             getZigbeeDeviceStateEx(states, sensorData)
     elif sensorName == 'ANALOG':
-        Debug('tasmota::getSensorDeviceStates:ANALOG: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
+#        Debug('tasmota::getSensorDeviceStates:ANALOG: sensorName: {}, sensorData: {}'.format(sensorName, sensorData))
         if isinstance(sensorData, collections.Mapping):
             for sensor, value in sensorData.items():
                 if sensor.startswith('CTEnergy') and isinstance(value, collections.Mapping):
@@ -547,8 +550,8 @@ def createDevice(mqttName, deviceID, mqttTopic, device, deviceAttr, desc):
             mqttName, deviceID, domoDeviceName, desc['DomoType']))
         return idx
 
-    Domoticz.Error("tasmota::createDevice: Failed: mqttName: {}, deviceID: {}, domoDeviceName: {}, topicdomoType: {}".format(
-        mqttName, DeviceID, domoDeviceName, desc['DomoType']))
+    Domoticz.Error("tasmota::createDevice: Failed: mqttName: {}, deviceID: {}, domoDeviceName: {}".format(
+        mqttName, DeviceID, domoDeviceName))
     return None
 
 # Translate device value received form domoticz to tasmota attribute/value
